@@ -2,9 +2,10 @@
 #include <stdio.h>
 #include <inttypes.h>
 #include <math.h>
+#include <memory.h>
 
 const unsigned SCREEN_WIDTH = 640, SCREEN_HEIGHT = 360;
-static auto MUSIC_FILENAME = "music.wav";
+static auto MUSIC_FILENAME = "music-3.wav";
 SDL_Surface *currentSurface;
 
 static Uint32 RGBA(int r, int g, int b, int a) {
@@ -32,14 +33,36 @@ void setPixel(Uint32 x, Uint32 y, Uint32 pixel) {
 	*target_pixel = pixel;
 }
 
-static const unsigned IN_SAMPLES_PER_ITERATION = 512;
+template <typename T, unsigned N>
+constexpr unsigned numberof(const T(&)[N]) { return N; }
+
+static const unsigned IN_SAMPLES_PER_ITERATION = 128;
 static const unsigned OUT_SAMPLES_PER_ITERATION = IN_SAMPLES_PER_ITERATION / 2 + 1;
 static const double TWENTY_OVER_LOG_10 = 20 / log(10);
+
+Uint32 HSVtoRGB(float H, float S, float V) {
+	H = fmaxf(0, fminf(360, H));
+	S = fmaxf(0, fminf(100, S));
+	V = fmaxf(0, fminf(100, V));
+	float s = S / 100;
+	float v = V / 100;
+	float C = s * v;
+	float X = C * (1 - fabsf(fmodf(H / 60.f, 2) - 1));
+	float m = v - C;
+	float r, g, b;
+	if (H >= 0 && H < 60) r = C, g = X, b = 0;
+	else if (H >= 60 && H < 120) r = X, g = C, b = 0;
+	else if (H >= 120 && H < 180) r = 0, g = C, b = X;
+	else if (H >= 180 && H < 240) r = 0, g = X, b = C;
+	else if (H >= 240 && H < 300) r = X, g = 0, b = C;
+	else r = C, g = 0, b = X;
+	return RGB(int((r + m) * 255), int((g + m) * 255), int((b + m) * 255));
+}
 
 // [-infinite, 0]
 static inline double toDecibels(double sample) {
 	//return 20 * log(sample) / log(10);
-	return log(sample) * TWENTY_OVER_LOG_10;
+	return fmax(-100, log(sample) * TWENTY_OVER_LOG_10);
 }
 
 // inData is stereo, 16-bit data (L R L R, etc.)
@@ -137,19 +160,36 @@ int main(int argc, char* args[]) {
 	};
 	bool quit = false, needsRerender = true;
 	double lastProcessedTime;
-	double fftOut[OUT_SAMPLES_PER_ITERATION];
+	double dftOut[OUT_SAMPLES_PER_ITERATION];
 	int16_t* const wavBufferForDFT = (int16_t*)wavBuffer;
 	unsigned waveBufferOffset = 0;
 	unsigned waveTotalSamples = wavLength / sizeof(wavBufferForDFT[0]) / wavSpec.channels;
 	auto wouldOverflowWavFile = [&] {
 		return waveBufferOffset + IN_SAMPLES_PER_ITERATION > waveTotalSamples;
 	};
-	//auto getSample = [&](unsigned index) {
-	//	return double(wavBufferForDFT[waveBufferOffset + index]) / (32768 * 2) + double(wavBufferForDFT[waveBufferOffset + index + 1]) / (32768 * 2);
-	//};
+	const unsigned CHUNKS = wavSpec.freq == 16000 ? 2 : 6;
+	auto processDFTInChunksAndSmooth = [&](double* smoothedDftResultInOut, unsigned processingChunks, double alpha) {
+		double nextValues[OUT_SAMPLES_PER_ITERATION], temp[OUT_SAMPLES_PER_ITERATION];
+		memset(nextValues, 0, OUT_SAMPLES_PER_ITERATION * sizeof(double));
 
-	processFFT(wavBufferForDFT + waveBufferOffset * wavSpec.channels, fftOut);
+		for (unsigned i = 0; i < processingChunks; i++) {
+			if (wouldOverflowWavFile()) return;
+			processFFT(wavBufferForDFT + waveBufferOffset * wavSpec.channels, temp);
+			waveBufferOffset += IN_SAMPLES_PER_ITERATION;
+			for (unsigned i = 0; i < OUT_SAMPLES_PER_ITERATION; i++) {
+				smoothedDftResultInOut[i] = (1 - alpha) * smoothedDftResultInOut[i] + alpha * temp[i];
+			}
+		}
+
+		//for (unsigned i = 0; i < OUT_SAMPLES_PER_ITERATION; i++) {
+		//	smoothedDftResultInOut[i] = (1 - alpha) * smoothedDftResultInOut[i] + alpha * nextValues[i] / processingChunks;
+		//}
+	};
+
+	// Process a first sample
+	processFFT(wavBufferForDFT + waveBufferOffset * wavSpec.channels, dftOut);
 	waveBufferOffset += IN_SAMPLES_PER_ITERATION;
+	printf("Target framerate: %f\n", 1.0 / (double(IN_SAMPLES_PER_ITERATION * CHUNKS) / wavSpec.freq));
 	lastProcessedTime = getTime();
 	SDL_PauseAudioDevice(deviceId, 0);
 
@@ -176,12 +216,19 @@ int main(int argc, char* args[]) {
 			//	}
 			//}
 
-			for (unsigned i = 0; i < 256; i++) {
-				double volume = 1 - (fmin(50, -fftOut[i]) / 50);
+			const unsigned BAR_HEIGHT = 4;
+			unsigned y = 0;
+			for (unsigned i = 0; i < numberof(dftOut); i++) {
+				float angle = i * 360.0f / numberof(dftOut);
+				double volume = 1 - (fmin(50, -dftOut[i]) / 50);
 				unsigned vol = unsigned(volume * 256);
 				for (unsigned j = 0; j < 256; j++) {
-					setPixel(j, i, j > vol ? RGB(0, 0, 0) : RGB(255, 255, 0));
+					uint32_t color = j > vol ? RGB(0, 0, 0) : HSVtoRGB(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
+					for (unsigned k = 0; k < BAR_HEIGHT; k++) {
+						setPixel(j, y + k, color);
+					}
 				}
+				y += BAR_HEIGHT;
 			}
 
 			SDL_UpdateWindowSurface(window);
@@ -191,12 +238,10 @@ int main(int argc, char* args[]) {
 
 		// Wait until we have played the whole DFT'ed sample
 		double time = getTime();
-		if ((time - lastProcessedTime) * wavSpec.freq >= IN_SAMPLES_PER_ITERATION) {
-			lastProcessedTime += double(IN_SAMPLES_PER_ITERATION) / wavSpec.freq;
-			//printf("Position: %f\n", double(waveBufferOffset) / waveTotalSamples);
+		if ((time - lastProcessedTime) * wavSpec.freq >= IN_SAMPLES_PER_ITERATION * CHUNKS) {
+			lastProcessedTime += double(IN_SAMPLES_PER_ITERATION * CHUNKS) / wavSpec.freq;
 			//currentVolume = processVolume(wavBufferForDFT + waveBufferOffset * wavSpec.channels);
-			processFFT(wavBufferForDFT + waveBufferOffset * wavSpec.channels, fftOut);
-			waveBufferOffset += IN_SAMPLES_PER_ITERATION;
+			processDFTInChunksAndSmooth(dftOut, CHUNKS, 0.03);
 			needsRerender = true;
 		}
 
