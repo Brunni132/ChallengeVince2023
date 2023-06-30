@@ -7,10 +7,11 @@
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
 const unsigned SCREEN_WIDTH = 640, SCREEN_HEIGHT = 360;
-static auto MUSIC_FILENAME = "music-3.wav";
-static const unsigned IN_SAMPLES_PER_ITERATION = 1024;
+static auto MUSIC_FILENAME = "music-2.wav";
+static const unsigned IN_SAMPLES_PER_ITERATION = 128;
 static const unsigned OUT_SAMPLES_PER_ITERATION = IN_SAMPLES_PER_ITERATION / 2 + 1;
 static const double TWENTY_OVER_LOG_10 = 20 / log(10);
+static const double MIN_DECIBELS = 60;
 
 SDL_Surface *currentSurface;
 
@@ -137,7 +138,7 @@ double TEMP(double* dftOutData, double positionInSpectrumBetween0And1, unsigned 
 		const double minFreq = 50;
 
 		double frequency = minFreq * exp(positionInSpectrumBetween0And1 * log(maxFreq / minFreq));
-		frequencyEquivalentInFft = OUT_SAMPLES_PER_ITERATION * frequency / maxFreq - 1;
+		frequencyEquivalentInFft = OUT_SAMPLES_PER_ITERATION * frequency / maxFreq;
 	}
 	else {
 		frequencyEquivalentInFft = positionInSpectrumBetween0And1 * (OUT_SAMPLES_PER_ITERATION - 1);
@@ -252,20 +253,10 @@ int main(int argc, char* args[]) {
 			auto screenSurface = SDL_GetWindowSurface(window);
 			setCurrentSurface(screenSurface);
 
-			// Total = 1010
-			// 500 Hz = 372
-			// 1000 Hz = 480
-			// 2000 Hz = 592
-			TEMP(0, wavSpec.freq);
-			TEMP(0.5, wavSpec.freq);
-			TEMP(1, wavSpec.freq);
-
 			for (unsigned i = 0; i < 256; i++) {
 				float angle = i * 320.0f / 256;
-				const double E = 2.718281828459045;
-				double positionInDft = numberof(dftOut) * pow(i / 255.0, E);
-				double dftValue = dftOut[(int)floor(positionInDft)];
-				double volume = 1 - (fmin(60, -dftValue) / 60);
+				double dftValue = TEMP(dftOut, i / 256.0, wavSpec.freq, true);
+				double volume = 1 - (fmin(MIN_DECIBELS, -dftValue) / MIN_DECIBELS);
 				unsigned vol = unsigned(volume * 256);
 				for (unsigned j = 0; j < 256; j++) {
 					uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
