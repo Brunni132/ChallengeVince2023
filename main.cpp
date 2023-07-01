@@ -162,7 +162,6 @@ int main(int argc, char* args[]) {
 		double time = getTime();
 		if ((time - lastProcessedTime) * wavSpec.freq >= processor.inSamplesPerIteration * CHUNKS) {
 			lastProcessedTime += double(processor.inSamplesPerIteration * CHUNKS) / wavSpec.freq;
-			//currentVolume = processVolume(wavBufferForDFT + waveBufferOffset * wavSpec.channels);
 			dftProcessor.processDFTInChunksAndSmooth(CHUNKS, 0.2);
 			needsRerender = true;
 		}

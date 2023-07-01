@@ -145,11 +145,31 @@ void DftProcessorForWav::processDFTInChunksAndSmooth(unsigned processingChunks, 
 	for (unsigned i = 0; i < processor.outSamplesPerIteration; i++) {
 		dftOut[i] = (1 - alpha) * dftOut[i] + alpha * nextValues[i];
 	}
-	return;
 }
 
 const vector<double>& DftProcessorForWav::lastProcessDFTResult() {
 	return dftOut;
+}
+
+void DftProcessorForWav::processVolumeOnly(unsigned processingChunks, double alpha) {
+	double volume;
+	for (unsigned i = 0; i < processingChunks; i++) {
+		if (wouldOverflowWavFile()) return;
+
+		if (i == 0) {
+			volume = processor.processVolume(wavBuffer + waveBufferOffset * wavSpec.channels);
+		}
+		else {
+			double temp = processor.processVolume(wavBuffer + waveBufferOffset * wavSpec.channels);
+			volume = fmax(volume, temp);
+		}
+
+		waveBufferOffset += processor.inSamplesPerIteration;
+	}
+
+	for (unsigned i = 0; i < processor.outSamplesPerIteration; i++) {
+		dftOut[i] = (1 - alpha) * dftOut[i] + alpha * volume;
+	}
 }
 
 void DftProcessorForWav::processDFT() {

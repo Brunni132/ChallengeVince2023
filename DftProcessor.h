@@ -43,6 +43,7 @@ struct DftProcessorForWav {
 
 	void processDFT();
 	void processDFTInChunksAndSmooth(unsigned processingChunks, double alpha);
+	void processVolumeOnly(unsigned processingChunks, double alpha);
 	const vector<double>& lastProcessDFTResult();
 	bool wouldOverflowWavFile();
 
