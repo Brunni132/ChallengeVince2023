@@ -1,18 +1,19 @@
-#include <SDL.h>
+ï»¿#include <SDL.h>
 #include <stdio.h>
 #include <inttypes.h>
 #include <math.h>
 #include <memory.h>
 
 #define min(x, y) ((x) < (y) ? (x) : (y))
+#define DB
+#define Hz
 
 const unsigned SCREEN_WIDTH = 640, SCREEN_HEIGHT = 360;
 static auto MUSIC_FILENAME = "music-3.wav";
 static const double MIN_DECIBELS = 60;
 static const unsigned IN_SAMPLES_PER_ITERATION = 128;
 static const unsigned OUT_SAMPLES_PER_ITERATION = IN_SAMPLES_PER_ITERATION / 2 + 1;
-static const bool MORE_COMPLETE_METHOD = false;
-static const bool LOGARITHMIC_REPRESENTATION_MINIMUM_FREQUENCY = 50; // 50…22050 Hz visually
+static const double LOGARITHMIC_REPRESENTATION_MINIMUM_FREQUENCY = 50; // 50â€¦22050 Hz visually
 static const double TWENTY_OVER_LOG_10 = 20 / log(10);
 
 SDL_Surface *currentSurface;
@@ -70,33 +71,36 @@ static inline double toDecibels(double sample) {
 }
 
 // inData is stereo, 16-bit data (L R L R, etc.)
-void processDFT(const int16_t* inData, double *outData) {
+// âš  useWindow method is not complete, it is valid only for the first half of the output samples; we should make a second pass, in which we shift the second part and process again, giving us a second first half that can be used.
+void processDFT(const int16_t* inData, double *outData, bool useConversionToFrequencyDomainValues = false, bool useWindow = false) {
 	// Zero REX & IMX so they can be used as accumulators
 	double REX[OUT_SAMPLES_PER_ITERATION], IMX[OUT_SAMPLES_PER_ITERATION];
 	for (unsigned k = 0; k < OUT_SAMPLES_PER_ITERATION; k++) {
 		REX[k] = IMX[k] = 0;
 	}
 
-	// Avant ça on applique une fenêtre: https://en.wikipedia.org/wiki/Window_function#Flat_top_window
+	// Avant Ã§a on applique une fenÃªtre: https://en.wikipedia.org/wiki/Window_function#Flat_top_window
 	double samples[IN_SAMPLES_PER_ITERATION];
-	//const double a0 = 0.3635819, a1 = 0.4891775, a2 = 0.1365995, a3 = 0.0106411;
+	const double a0 = 0.3635819, a1 = 0.4891775, a2 = 0.1365995, a3 = 0.0106411;
 	for (unsigned k = 0; k < IN_SAMPLES_PER_ITERATION; k++) {
 		double sample = double(*inData++) / (32768 * 2) + double(*inData++) / (32768 * 2);
 
-		//double angle = 2 * M_PI * k / IN_SAMPLES_PER_ITERATION;
-		//sample *= a0 - a1 * cos(angle) + a2 * cos(angle * 2) - a3 * cos(angle * 3);
+		if (useWindow) {
+			double angle = 2 * M_PI * k / IN_SAMPLES_PER_ITERATION;
+			sample *= a0 - a1 * cos(angle) + a2 * cos(angle * 2) - a3 * cos(angle * 3);
+		}
 		samples[k] = sample;
 	}
 
 	// Correlate input with the cosine and sine wave
 	for (unsigned k = 0; k < OUT_SAMPLES_PER_ITERATION; k++) {
-		// C'est que ça c'est la DFT
+		// C'est que Ã§a c'est la DFT
 		for (unsigned i = 0; i < IN_SAMPLES_PER_ITERATION; i++) {
 			REX[k] += samples[i] * cos(2 * M_PI * k * i / IN_SAMPLES_PER_ITERATION);
 			IMX[k] += samples[i] * sin(2 * M_PI * k * i / IN_SAMPLES_PER_ITERATION);
 		}
 
-		if (MORE_COMPLETE_METHOD) {
+		if (useConversionToFrequencyDomainValues) {
 			//// https://www.dspguide.com/ch8/5.htm
 			if (k == 0 || k == OUT_SAMPLES_PER_ITERATION - 1) {
 				REX[k] /= IN_SAMPLES_PER_ITERATION;
@@ -107,13 +111,13 @@ void processDFT(const int16_t* inData, double *outData) {
 			IMX[k] = -IMX[k] / (IN_SAMPLES_PER_ITERATION / 2);
 		}
 
-		// Module du nombre complexe (distance à l'origine)
-		// = pour chaque fréquence l'amplitude correspondante
+		// Module du nombre complexe (distance Ã  l'origine)
+		// = pour chaque frÃ©quence l'amplitude correspondante
 		outData[k] = sqrt(REX[k] * REX[k] + IMX[k] * IMX[k]);
 	}
 
 	// Calculer en DB comme pour le volume
-	// Bande de fréquence -> énergie qu'il y a dedans
+	// Bande de frÃ©quence -> Ã©nergie qu'il y a dedans
 	for (unsigned k = 0; k < OUT_SAMPLES_PER_ITERATION; k++) {
 		outData[k] = toDecibels(outData[k]);
 	}
@@ -129,25 +133,24 @@ double processVolume(const int16_t* inData) {
 	}
 
 	// TODO: demander https://dspillustrations.com/pages/posts/misc/decibel-conversion-factor-10-or-factor-20.html
+	// C'est bien 20
 	double linearVolume = sqrt(sum / samples);
 	return toDecibels(linearVolume);
 }
 
-double TEMP(double* dftOutData, double positionInSpectrumBetween0And1, unsigned sampleRate, bool useLogarithmicScale) {
+// Typical: minFrequency = 50 or 80, maxFrequency = wavSpec.freq / 2
+double getDftPointInterpolated(double* dftOutData, double positionInSpectrumBetween0And1, unsigned minFrequency, unsigned maxFrequency, bool useLogarithmicScale) {
 	double frequencyEquivalentInFft;
 	if (useLogarithmicScale) {
 		// Min frequency in the FFT corresponds to the first entry, and it's actually 0
 		// Max frequency in the FFT is the same, it corresponds to the last entry, OUT_SAMPLES_PER_ITERATION - 1
-		const double maxFreq = double(sampleRate / 2);
-		const double minFreq = LOGARITHMIC_REPRESENTATION_MINIMUM_FREQUENCY;
-
-		double frequency = minFreq * exp(positionInSpectrumBetween0And1 * log(maxFreq / minFreq));
-		frequencyEquivalentInFft = OUT_SAMPLES_PER_ITERATION * frequency / maxFreq;
+		double frequency = minFrequency * exp(positionInSpectrumBetween0And1 * log(maxFrequency / minFrequency));
+		frequencyEquivalentInFft = OUT_SAMPLES_PER_ITERATION * frequency / maxFrequency;
 	}
 	else {
 		frequencyEquivalentInFft = positionInSpectrumBetween0And1 * (OUT_SAMPLES_PER_ITERATION - 1);
 	}
-	//printf("TEMP: %f -> %f, entry = %d (%f) %d\n", positionInSpectrumBetween0And1, frequency, integerIndexValue, realIndexValue, nextIndexValue);
+	//printf("getDftPointInterpolated: %f -> %f, entry = %d (%f) %d\n", positionInSpectrumBetween0And1, frequency, integerIndexValue, realIndexValue, nextIndexValue);
 
 	// Interpolate in the DFT table
 	unsigned integerIndexValue = unsigned(frequencyEquivalentInFft);
@@ -155,6 +158,10 @@ double TEMP(double* dftOutData, double positionInSpectrumBetween0And1, unsigned 
 
 	double realIndexValue = frequencyEquivalentInFft - floor(frequencyEquivalentInFft);
 	return dftOutData[integerIndexValue] * (1 - realIndexValue) + dftOutData[integerIndexValue + 1] * realIndexValue;
+}
+
+double convertPointToDecibels(double sample, double cutoffDbLevel) {
+	return 1 - (fmin(cutoffDbLevel, -sample) / cutoffDbLevel);
 }
 
 int main(int argc, char* args[]) {
@@ -259,8 +266,8 @@ int main(int argc, char* args[]) {
 
 			//for (unsigned i = 0; i < 256; i++) {
 			//	float angle = i * 320.0f / 256;
-			//	double dftValue = TEMP(dftOut, i / 256.0, wavSpec.freq, true);
-			//	double volume = 1 - (fmin(MIN_DECIBELS, -dftValue) / MIN_DECIBELS);
+			//	double dftValue = getDftPointInterpolated(dftOut, i / 256.0, 80, wavSpec.freq, true);
+			//	double volume = convertPointToDecibels(dftValue, MIN_DECIBELS);
 			//	unsigned vol = unsigned(volume * 256);
 			//	for (unsigned j = 0; j < 256; j++) {
 			//		uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
@@ -272,8 +279,9 @@ int main(int argc, char* args[]) {
 			unsigned y = 0;
 			for (unsigned i = 0; i < numberof(dftOut); i++) {
 				float angle = i * 360.0f / numberof(dftOut);
-				double sample = TEMP(dftOut, i / numberof(dftOut), wavSpec.freq, true);
-				double volume = 1 - (fmin(50, -dftOut[i]) / 50);
+				double fraction = double(i) / (numberof(dftOut) - 1);
+				double sample = getDftPointInterpolated(dftOut, fraction, 50 Hz, wavSpec.freq / 2, false);
+				double volume = convertPointToDecibels(sample, 50 DB);
 				unsigned vol = unsigned(volume * 256);
 				for (unsigned j = 0; j < 256; j++) {
 					uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
