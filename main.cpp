@@ -7,11 +7,13 @@
 #define min(x, y) ((x) < (y) ? (x) : (y))
 
 const unsigned SCREEN_WIDTH = 640, SCREEN_HEIGHT = 360;
-static auto MUSIC_FILENAME = "music-2.wav";
+static auto MUSIC_FILENAME = "music-3.wav";
+static const double MIN_DECIBELS = 60;
 static const unsigned IN_SAMPLES_PER_ITERATION = 128;
 static const unsigned OUT_SAMPLES_PER_ITERATION = IN_SAMPLES_PER_ITERATION / 2 + 1;
+static const bool MORE_COMPLETE_METHOD = false;
+static const bool LOGARITHMIC_REPRESENTATION_MINIMUM_FREQUENCY = 50; // 50…22050 Hz visually
 static const double TWENTY_OVER_LOG_10 = 20 / log(10);
-static const double MIN_DECIBELS = 60;
 
 SDL_Surface *currentSurface;
 
@@ -94,14 +96,16 @@ void processDFT(const int16_t* inData, double *outData) {
 			IMX[k] += samples[i] * sin(2 * M_PI * k * i / IN_SAMPLES_PER_ITERATION);
 		}
 
-		//// https://www.dspguide.com/ch8/5.htm
-		if (k == 0 || k == OUT_SAMPLES_PER_ITERATION - 1) {
-			REX[k] /= IN_SAMPLES_PER_ITERATION;
+		if (MORE_COMPLETE_METHOD) {
+			//// https://www.dspguide.com/ch8/5.htm
+			if (k == 0 || k == OUT_SAMPLES_PER_ITERATION - 1) {
+				REX[k] /= IN_SAMPLES_PER_ITERATION;
+			}
+			else {
+				REX[k] /= IN_SAMPLES_PER_ITERATION / 2;
+			}
+			IMX[k] = -IMX[k] / (IN_SAMPLES_PER_ITERATION / 2);
 		}
-		else {
-			REX[k] /= IN_SAMPLES_PER_ITERATION / 2;
-		}
-		IMX[k] = -IMX[k] / (IN_SAMPLES_PER_ITERATION / 2);
 
 		// Module du nombre complexe (distance à l'origine)
 		// = pour chaque fréquence l'amplitude correspondante
@@ -135,7 +139,7 @@ double TEMP(double* dftOutData, double positionInSpectrumBetween0And1, unsigned 
 		// Min frequency in the FFT corresponds to the first entry, and it's actually 0
 		// Max frequency in the FFT is the same, it corresponds to the last entry, OUT_SAMPLES_PER_ITERATION - 1
 		const double maxFreq = double(sampleRate / 2);
-		const double minFreq = 50;
+		const double minFreq = LOGARITHMIC_REPRESENTATION_MINIMUM_FREQUENCY;
 
 		double frequency = minFreq * exp(positionInSpectrumBetween0And1 * log(maxFreq / minFreq));
 		frequencyEquivalentInFft = OUT_SAMPLES_PER_ITERATION * frequency / maxFreq;
@@ -253,15 +257,31 @@ int main(int argc, char* args[]) {
 			auto screenSurface = SDL_GetWindowSurface(window);
 			setCurrentSurface(screenSurface);
 
-			for (unsigned i = 0; i < 256; i++) {
-				float angle = i * 320.0f / 256;
-				double dftValue = TEMP(dftOut, i / 256.0, wavSpec.freq, true);
-				double volume = 1 - (fmin(MIN_DECIBELS, -dftValue) / MIN_DECIBELS);
+			//for (unsigned i = 0; i < 256; i++) {
+			//	float angle = i * 320.0f / 256;
+			//	double dftValue = TEMP(dftOut, i / 256.0, wavSpec.freq, true);
+			//	double volume = 1 - (fmin(MIN_DECIBELS, -dftValue) / MIN_DECIBELS);
+			//	unsigned vol = unsigned(volume * 256);
+			//	for (unsigned j = 0; j < 256; j++) {
+			//		uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
+			//		setPixel(j, i, color);
+			//	}
+			//}
+
+			const unsigned BAR_HEIGHT = 4;
+			unsigned y = 0;
+			for (unsigned i = 0; i < numberof(dftOut); i++) {
+				float angle = i * 360.0f / numberof(dftOut);
+				double sample = TEMP(dftOut, i / numberof(dftOut), wavSpec.freq, true);
+				double volume = 1 - (fmin(50, -dftOut[i]) / 50);
 				unsigned vol = unsigned(volume * 256);
 				for (unsigned j = 0; j < 256; j++) {
 					uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
-					setPixel(j, i, color);
+					for (unsigned k = 0; k < BAR_HEIGHT; k++) {
+						setPixel(j, y + k, color);
+					}
 				}
+				y += BAR_HEIGHT;
 			}
 
 			SDL_UpdateWindowSurface(window);
