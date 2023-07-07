@@ -133,8 +133,8 @@ int main(int argc, char* args[]) {
 			}
 
 			// Dim image weirdly
-			dimScreenWeirdly();
-			//moveScreen(1, 0, 8);
+			//dimScreenWeirdly();
+			moveScreen(1, 0, 8);
 
 			//Uint32 c1 = RGB(255, 255, 255), c2 = RGB(0, 0, 0);
 			//Uint16 a = 16;
