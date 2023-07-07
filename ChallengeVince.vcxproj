@@ -143,9 +143,8 @@
   <ItemGroup>
     <ClCompile Include="Coroutines.h" />
     <ClCompile Include="DftProcessor.cpp" />
-    <ClCompile Include="Drawing.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Drawing.h" />
+    <ClCompile Include="DrawingSurface.h" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DftProcessor.h" />

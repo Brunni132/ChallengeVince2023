@@ -21,10 +21,7 @@
     <ClCompile Include="DftProcessor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Drawing.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="Drawing.h">
+    <ClCompile Include="DrawingSurface.h">
       <Filter>Header Files</Filter>
     </ClCompile>
     <ClCompile Include="Coroutines.h">

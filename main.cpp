@@ -1,107 +1,210 @@
 ﻿#include "DftProcessor.h"
-#include "Drawing.h"
+//#include "DrawingSurface.h"
+#include "DrawingFloat.h"
 #include "Coroutines.h"
+#include <functional>
 
-#define DRAWING_ROUTINE_TO_USE drawShit
-static auto MUSIC_FILENAME = "music-3.wav";
+#define DRAWING_ROUTINE_TO_USE drawShit2
+static auto MUSIC_FILENAME = "music-2.wav";
+unsigned processChunksAtOnce = 6;
+bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
+
+struct MoveTracker {
+	double positionX = 0, positionY = 0;
+
+	void move(double deltaX, double deltaY) {
+		positionX += deltaX, positionY += deltaY;
+	}
+
+	void checkMoveNeeded(std::function<void(int, int)> doMove) {
+		int movingX = int(fmax(-1, fmin(+1, positionX))), movingY = int(fmax(-1, fmin(+1, positionY)));
+		positionX -= movingX, positionY -= movingY;
+		if (movingX || movingY)
+			doMove(movingX, movingY);
+	}
+};
 
 ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor, SDL_AudioSpec& wavSpec) noexcept {
-	const Uint32 colors[] = {
-		RGB(48, 48, 255),
-		RGB(255, 48, 255),
-		RGB(255, 255, 48)
-	};
 	double theta = 0;
 	auto currentColor = [&] {
-		return colors[unsigned(theta / 60) % numberof(colors)];
+		return HSV(int(theta / 4) % 360, 100, 50);
+	};
+	auto currentAccentColor = [&] {
+		return HSV(int(theta / 4 + 180) % 360, 50, 100);
 	};
 
-	createDrawingSurface(240, 160, 3_X);
-	clearScreen(currentColor());
+	auto& ds = createDrawingSurface(240, 160, 3_X);
+	ds.clearScreen(currentColor());
+	ds.protectOverflow = true;
+	processChunksAtOnce = 3;
+	wantsFullFrequencies = false;
 
-	unsigned drawWidth = drawingSurface->w, drawHeight = drawingSurface->h;
+	int frameNo = 0;
+	unsigned drawWidth = ds.w, drawHeight = ds.h;
 	while (true) {
 		auto& dftOut(dftProcessor.currentDFT());
 		processor.useConversionToFrequencyDomainValues = false;
 		processor.useWindow = false;
 
-		for (unsigned k = 0; k < 20; k++) {
-			double rmax = 80, n = 6, d = 8;
+		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
+		Color color(currentAccentColor());
+		for (unsigned k = 0; k < 40; k++) {
+			double rmax = volume * 160, n = 6, d = 8;
 			double r = rmax * cos(n / d * theta);
 			double x = r * cos(theta);
 			double y = r * sin(theta);
-			setPixel(x + drawWidth / 2, y + drawHeight / 2, RGB(255, 255, 255));
+			ds.setPixel(x + drawWidth / 2, y + drawHeight / 2, Color(300, 300, 300));
 			theta += 0.004;
 		}
 
-		printf("Theta: %f\n", theta);
-
-		// Dim image weirdly
-		//dimScreenWeirdly();
-		moveScreen(1, 0, currentColor());
-		co_await std::suspend_always{};
-	}
-}
-
-ReturnObject drawWithSmoothGraph(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
-	createDrawingSurface(480, 320, 1_X);
-	clearScreen(RGB(48, 48, 255));
-
-	while (true) {
-		auto& dftOut(dftProcessor.currentDFT());
-		processor.useConversionToFrequencyDomainValues = true;
-		processor.useWindow = false;
-		for (unsigned i = 0; i < 256; i++) {
-			float angle = i * 320.0f / 256;
-			double dftValue = processor.getDftPointInterpolated(to_array(dftOut), i / 256.0, 50_Hz, wavSpec.freq / 2, true);
-			double volume = processor.convertPointToDecibels(dftValue, 80_DB);
-			unsigned vol = unsigned(volume * 256);
-			for (unsigned j = 0; j < 256; j++) {
-				uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
-				setPixel(j, i, color);
-			}
+		if (frameNo++ % 2 == 1) {
+			moveScreen(1, 0, currentColor(), 40);
 		}
-
 		co_await std::suspend_always{};
 	}
 }
 
-ReturnObject drawWithBars(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
-	bool useLinearScale = true;
-	createDrawingSurface(256, 256, 2_X);
-	clearScreen(RGB(48, 48, 255));
+ReturnObject drawShit2(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+	double theta = 0;
+	auto currentColor = [&] {
+		return HSV(int(theta / 4) % 360, 100, 50);
+	};
+	auto currentAccentColor = [&] {
+		return HSV(int(theta / 4 + 180) % 360, 50, 100);
+	};
+
+	auto& ds = createDrawingSurface(240, 160, 3_X);
+	ds.clearScreen(currentColor());
+	ds.protectOverflow = true;
+	processChunksAtOnce = 1;
+	wantsFullFrequencies = false;
+
+	unsigned drawWidth = ds.w, drawHeight = ds.h;
+	double screenAngle = 0;
+	MoveTracker screen;
 
 	while (true) {
-		const unsigned BAR_HEIGHT = 4;
-		unsigned y = 0;
 		auto& dftOut(dftProcessor.currentDFT());
 		processor.useConversionToFrequencyDomainValues = false;
 		processor.useWindow = false;
-		for (unsigned i = 0; i < dftOut.size(); i++) {
-			float angle = i * 360.0f / dftOut.size();
-			double fraction = double(i) / (dftOut.size() - 1);
-			double sample = processor.getDftPointInterpolated(to_array(dftOut), fraction, 50_Hz, wavSpec.freq / 2, false);
-			unsigned vol;
-			if (useLinearScale) {
-				// Division by 60 because sometimes it goes slightly over 0
-				vol = fmax(0, sample + 50) * 256 / 60;
-			}
-			else {
-				double volume = processor.convertPointToDecibels(sample, 50_DB);
-				vol = unsigned(volume * 256);
-			}
-			for (unsigned j = 0; j < 256; j++) {
-				uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
-				for (unsigned k = 0; k < BAR_HEIGHT; k++) {
-					setPixel(j, y + k, color);
-				}
-			}
-			y += BAR_HEIGHT;
+
+		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
+		Color color(currentAccentColor());
+		for (unsigned k = 0; k < 15; k++) {
+			double rmax = volume * 160, n = 6, d = 8;
+			double r = rmax * cos(n / d * theta);
+			double x = r * cos(theta);
+			double y = r * sin(theta);
+			ds.setPixel(x + drawWidth / 2, y + drawHeight / 2, Color(128, 128, 128).add(color));
+			theta += 0.004;
 		}
 
+		screenAngle += 0.0003;
+		screen.move(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
+		screen.checkMoveNeeded([&](int x, int y) {
+			moveScreen(x, y, currentColor(), 40);
+		});
 		co_await std::suspend_always{};
 	}
 }
+
+//ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor, SDL_AudioSpec& wavSpec) noexcept {
+//	const Uint32 colors[] = {
+//		RGB(48, 48, 255),
+//		RGB(255, 48, 255),
+//		RGB(255, 255, 48)
+//	};
+//	double theta = 0;
+//	auto currentColor = [&] {
+//		return colors[unsigned(theta / 60) % numberof(colors)];
+//	};
+//
+//	createDrawingSurface(240, 160, 3_X);
+//	clearScreen(currentColor());
+//
+//	unsigned drawWidth = drawingSurface->w, drawHeight = drawingSurface->h;
+//	while (true) {
+//		auto& dftOut(dftProcessor.currentDFT());
+//		processor.useConversionToFrequencyDomainValues = false;
+//		processor.useWindow = false;
+//
+//		for (unsigned k = 0; k < 20; k++) {
+//			double rmax = 80, n = 6, d = 8;
+//			double r = rmax * cos(n / d * theta);
+//			double x = r * cos(theta);
+//			double y = r * sin(theta);
+//			setPixel(x + drawWidth / 2, y + drawHeight / 2, RGB(255, 255, 255));
+//			theta += 0.004;
+//		}
+//
+//		printf("Theta: %f\n", theta);
+//
+//		// Dim image weirdly
+//		//dimScreenWeirdly();
+//		moveScreen(1, 0, currentColor());
+//		co_await std::suspend_always{};
+//	}
+//}
+//
+//ReturnObject drawWithSmoothGraph(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+//	createDrawingSurface(480, 320, 1_X);
+//	clearScreen(RGB(48, 48, 255));
+//
+//	while (true) {
+//		auto& dftOut(dftProcessor.currentDFT());
+//		processor.useConversionToFrequencyDomainValues = true;
+//		processor.useWindow = false;
+//		for (unsigned i = 0; i < 256; i++) {
+//			float angle = i * 320.0f / 256;
+//			double dftValue = processor.getDftPointInterpolated(to_array(dftOut), i / 256.0, 50_Hz, wavSpec.freq / 2, true);
+//			double volume = processor.convertPointToDecibels(dftValue, 80_DB);
+//			unsigned vol = unsigned(volume * 256);
+//			for (unsigned j = 0; j < 256; j++) {
+//				uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
+//				setPixel(j, i, color);
+//			}
+//		}
+//
+//		co_await std::suspend_always{};
+//	}
+//}
+//
+//ReturnObject drawWithBars(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+//	bool useLinearScale = true;
+//	createDrawingSurface(256, 256, 2_X);
+//	clearScreen(RGB(48, 48, 255));
+//
+//	while (true) {
+//		const unsigned BAR_HEIGHT = 4;
+//		unsigned y = 0;
+//		auto& dftOut(dftProcessor.currentDFT());
+//		processor.useConversionToFrequencyDomainValues = false;
+//		processor.useWindow = false;
+//		for (unsigned i = 0; i < dftOut.size(); i++) {
+//			float angle = i * 360.0f / dftOut.size();
+//			double fraction = double(i) / (dftOut.size() - 1);
+//			double sample = processor.getDftPointInterpolated(to_array(dftOut), fraction, 50_Hz, wavSpec.freq / 2, false);
+//			unsigned vol;
+//			if (useLinearScale) {
+//				// Division by 60 because sometimes it goes slightly over 0
+//				vol = fmax(0, sample + 50) * 256 / 60;
+//			}
+//			else {
+//				double volume = processor.convertPointToDecibels(sample, 50_DB);
+//				vol = unsigned(volume * 256);
+//			}
+//			for (unsigned j = 0; j < 256; j++) {
+//				uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
+//				for (unsigned k = 0; k < BAR_HEIGHT; k++) {
+//					setPixel(j, y + k, color);
+//				}
+//			}
+//			y += BAR_HEIGHT;
+//		}
+//
+//		co_await std::suspend_always{};
+//	}
+//}
 
 
 int main(int argc, char* args[]) {
@@ -151,24 +254,24 @@ int main(int argc, char* args[]) {
 		return double(SDL_GetPerformanceCounter()) / performanceCounterFreq;
 	};
 	bool quit = false, needsRerender = true;
-	double lastProcessedTime;
+	double lastProcessedTime, lastRenderedTime;
 	DftProcessor processor(128);
 	DftProcessorForWav dftProcessor(processor, (int16_t*)wavBuffer, wavLength, wavSpec);
-	const unsigned CHUNKS = 6;
 
 	// Process a first sample
 	dftProcessor.processDFT();
-	printf("Target framerate: %f\n", 1.0 / (double(processor.inSamplesPerIteration * CHUNKS) / wavSpec.freq));
-	lastProcessedTime = getTime();
+	lastRenderedTime = lastProcessedTime = getTime();
 	SDL_PauseAudioDevice(deviceId, 0);
 
 	//double currentVolume = 0;
 
-	double theta = 0;
 	SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
 	SDL_RenderClear(renderer);
 
 	std::coroutine_handle<> drawingCoroutine = DRAWING_ROUTINE_TO_USE(dftProcessor, processor, wavSpec);
+	double firstRenderedTime = getTime();
+	unsigned renderedFrames = 0, drawnFrames = 0;
+	printf("Target framerate: %f\n", 1.0 / (double(processor.inSamplesPerIteration * processChunksAtOnce) / wavSpec.freq));
 
 	while (!quit && !dftProcessor.wouldOverflowWavFile()) {
 		SDL_Event e;
@@ -186,23 +289,48 @@ int main(int argc, char* args[]) {
 			//printf("Blending: %08x %08x a=%02x = %08x\n", c1, c2, a, blend(c1, c2, a));
 
 			drawingCoroutine();
-
-			SDL_Rect srcRect = { 0, 0, drawingSurface->w, drawingSurface->h };
-			SDL_Rect dstRect = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
-			SDL_BlitScaled(drawingSurface, &srcRect, screenSurface, &dstRect);
-
-			SDL_UpdateWindowSurface(window);
-			SDL_RenderPresent(renderer);
 			needsRerender = false;
+			drawnFrames += 1;
+
+			double time = getTime();
+			if (time - lastRenderedTime >= 1 / 60.0) {
+				lastRenderedTime += 1 / 60.0;
+				if (lastRenderedTime < time - 1 / 60.0) lastRenderedTime = time - 1 / 60.0;
+				drawingSurface->blitToSdlSurface();
+				SDL_Rect srcRect = { 0, 0, sdlDrawingSurface->w, sdlDrawingSurface->h };
+				SDL_Rect dstRect = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
+				SDL_BlitScaled(sdlDrawingSurface, &srcRect, screenSurface, &dstRect);
+
+				SDL_UpdateWindowSurface(window);
+				SDL_RenderPresent(renderer);
+
+				renderedFrames += 1;
+				if (renderedFrames >= 200) {
+					printf("Average framerate: rendered=%f, drawn=%f\n", renderedFrames / (time - firstRenderedTime), drawnFrames / (time - firstRenderedTime));
+					firstRenderedTime = time;
+					renderedFrames = drawnFrames = 0;
+				}
+			}
 		}
 
 		// Wait until we have played the whole DFT'ed sample
 		double time = getTime();
-		if ((time - lastProcessedTime) * wavSpec.freq >= processor.inSamplesPerIteration * CHUNKS) {
-			lastProcessedTime += double(processor.inSamplesPerIteration * CHUNKS) / wavSpec.freq;
-			dftProcessor.processDFTInChunksAndSmooth(CHUNKS, 0.2);
+		unsigned processed = 0;
+		while ((time - lastProcessedTime) * wavSpec.freq >= processor.inSamplesPerIteration * processChunksAtOnce) {
+			lastProcessedTime += double(processor.inSamplesPerIteration * processChunksAtOnce) / wavSpec.freq;
+			if (wantsFullFrequencies) {
+				dftProcessor.processDFTInChunksAndSmooth(processChunksAtOnce, 0.2);
+			}
+			else {
+				dftProcessor.processVolumeOnly(processChunksAtOnce, 0.2);
+			}
+			
+			processed += 1;
 			needsRerender = true;
 		}
+		//if (processed > 1) {
+		//	printf("Warning: is lagging (frameskip=%d)\n", processed - 1);
+		//}
 
 		SDL_Delay(1);
 	}
