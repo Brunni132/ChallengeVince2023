@@ -27,6 +27,9 @@
     <ClCompile Include="Drawing.h">
       <Filter>Header Files</Filter>
     </ClCompile>
+    <ClCompile Include="Coroutines.h">
+      <Filter>Header Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DftProcessor.h">

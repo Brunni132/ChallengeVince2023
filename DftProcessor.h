@@ -18,8 +18,8 @@ template <typename T> const T* to_array(const vector<T>& a) { return &a[0]; }
 
 template <typename T, unsigned N> constexpr unsigned numberof(const T(&)[N]) { return N; }
 
-#define DB
-#define Hz
+static inline int operator"" _DB(unsigned long long val) { return int(val); }
+static inline int operator"" _Hz(unsigned long long val) { return int(val); }
 
 struct DftProcessor {
 	DftProcessor(unsigned samplesPerIteration);

@@ -1,7 +1,7 @@
 ﻿#include "DftProcessor.h"
 
 static const double TWENTY_OVER_LOG_10 = 20 / log(10);
-static const double DECIBEL_CUTOFF = -100 DB;
+static const double DECIBEL_CUTOFF = -100_DB;
 
 
 // [-infinite, 0]

@@ -2,7 +2,18 @@
 #include <SDL.h>
 #include <memory.h>
 
-static SDL_Surface* currentSurface;
+static SDL_Surface* drawingSurface;
+static SDL_Window* window;
+static unsigned SCREEN_WIDTH = 240 * 3, SCREEN_HEIGHT = 160 * 3;
+
+static inline unsigned operator"" _X(unsigned long long val) { return unsigned(val); }
+
+static void createDrawingSurface(unsigned width, unsigned height, unsigned desiredScaling) {
+	SCREEN_WIDTH = width * desiredScaling;
+	SCREEN_HEIGHT = height * desiredScaling;
+	SDL_SetWindowSize(window, SCREEN_WIDTH, SCREEN_HEIGHT);
+	drawingSurface = SDL_CreateRGBSurface(0, width, height, 32, 0xff << 16, 0xff << 8, 0xff, 0xff << 24);
+}
 
 static Uint32 RGBA(int r, int g, int b, int a) {
 	if (r < 0) r = 0;
@@ -37,25 +48,25 @@ static Uint32 HSV(float H, float S, float V) {
 	return RGB(int((r + m) * 255), int((g + m) * 255), int((b + m) * 255));
 }
 
-static void setCurrentSurface(SDL_Surface* surface) {
-	currentSurface = surface;
-}
-
 static void clearScreen(Uint32 colorWithAlpha) {
-	memset(currentSurface->pixels, colorWithAlpha, currentSurface->pitch * currentSurface->h);
+	unsigned size = unsigned(drawingSurface->pitch * drawingSurface->h) / 4;
+	Uint32* ptr = (Uint32*)drawingSurface->pixels;
+	while (size-- > 0) {
+		*ptr++ = colorWithAlpha;
+	}
 }
 
 static inline void setPixel(Uint32 x, Uint32 y, Uint32 pixel) {
-	if (x >= unsigned(currentSurface->w) || y >= unsigned(currentSurface->h)) return;
+	if (x >= unsigned(drawingSurface->w) || y >= unsigned(drawingSurface->h)) return;
 
-	Uint32* target_pixel = (Uint32*)((Uint8*)currentSurface->pixels + y * currentSurface->pitch + x * currentSurface->format->BytesPerPixel);
+	Uint32* target_pixel = (Uint32*)((Uint8*)drawingSurface->pixels + y * drawingSurface->pitch + x * drawingSurface->format->BytesPerPixel);
 	*target_pixel = pixel;
 }
 
 static inline Uint32 getPixel(Uint32 x, Uint32 y) {
-	if (x >= unsigned(currentSurface->w) || y >= unsigned(currentSurface->h)) return 0;
+	if (x >= unsigned(drawingSurface->w) || y >= unsigned(drawingSurface->h)) return 0;
 
-	Uint32* target_pixel = (Uint32*)((Uint8*)currentSurface->pixels + y * currentSurface->pitch + x * currentSurface->format->BytesPerPixel);
+	Uint32* target_pixel = (Uint32*)((Uint8*)drawingSurface->pixels + y * drawingSurface->pitch + x * drawingSurface->format->BytesPerPixel);
 	return *target_pixel;
 }
 
@@ -76,8 +87,8 @@ static inline Uint32 blendWrong(Uint32 pixel1, Uint32 pixel2 = RGB(48, 48, 48), 
 }
 
 static void dimScreenWeirdly() {
-	for (unsigned y = 0; y < currentSurface->h; y++) {
-		for (unsigned x = 0; x < currentSurface->w; x++) {
+	for (unsigned y = 0; y < unsigned(drawingSurface->h); y++) {
+		for (unsigned x = 0; x < unsigned(drawingSurface->w); x++) {
 			Uint32 pixel = getPixel(x, y);
 			setPixel(x, y, blendWrong(pixel));
 		}
@@ -85,8 +96,8 @@ static void dimScreenWeirdly() {
 }
 
 static void moveScreen(int moveX, int moveY, Uint16 alpha = 16) {
-	for (unsigned y = 0; y < currentSurface->h; y++) {
-		for (unsigned x = 0; x < currentSurface->w; x++) {
+	for (unsigned y = 0; y < unsigned(drawingSurface->h); y++) {
+		for (unsigned x = 0; x < unsigned(drawingSurface->w); x++) {
 			Uint32 pixel1 = getPixel(x, y);
 			Uint32 pixel2 = getPixel(x - moveX, y - moveY);
 			setPixel(x, y, blend(pixel1, pixel2, alpha));

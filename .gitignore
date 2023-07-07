@@ -3,6 +3,9 @@
 ##
 ## Get latest from https://github.com/github/gitignore/blob/main/VisualStudio.gitignore
 
+# Instead, just extract the ZIP
+SDL2-2.27.1/
+
 # User-specific files
 *.rsuser
 *.suo
