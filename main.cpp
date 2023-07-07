@@ -1,54 +1,9 @@
 ﻿#include "DftProcessor.h"
+#include "Drawing.h"
 
-const unsigned SCREEN_WIDTH = 640, SCREEN_HEIGHT = 360;
+const unsigned SCREEN_WIDTH = 240 * 3, SCREEN_HEIGHT = 160 * 3;
 static auto MUSIC_FILENAME = "music-3.wav";
 static const double TWENTY_OVER_LOG_10 = 20 / log(10);
-
-SDL_Surface *currentSurface;
-
-static Uint32 RGBA(int r, int g, int b, int a) {
-	if (r < 0) r = 0;
-	else if (r > 255) r = 255;
-	if (g < 0) g = 0;
-	else if (g > 255) g = 255;
-	if (b < 0) b = 0;
-	else if (b > 255) b = 255;
-	if (a < 0) a = 0;
-	else if (a > 255) a = 255;
-	return (Uint8)a << 24 | (Uint8)r << 16 | (Uint8)g << 8 | (Uint8)b;
-}
-
-static Uint32 RGB(int r, int g, int b) { return RGBA(r, g, b, 0xff); }
-
-Uint32 HSV(float H, float S, float V) {
-	H = fmaxf(0, fminf(360, H));
-	S = fmaxf(0, fminf(100, S));
-	V = fmaxf(0, fminf(100, V));
-	float s = S / 100;
-	float v = V / 100;
-	float C = s * v;
-	float X = C * (1 - fabsf(fmodf(H / 60.f, 2) - 1));
-	float m = v - C;
-	float r, g, b;
-	if (H >= 0 && H < 60) r = C, g = X, b = 0;
-	else if (H >= 60 && H < 120) r = X, g = C, b = 0;
-	else if (H >= 120 && H < 180) r = 0, g = C, b = X;
-	else if (H >= 180 && H < 240) r = 0, g = X, b = C;
-	else if (H >= 240 && H < 300) r = X, g = 0, b = C;
-	else r = C, g = 0, b = X;
-	return RGB(int((r + m) * 255), int((g + m) * 255), int((b + m) * 255));
-}
-
-void setCurrentSurface(SDL_Surface* surface) {
-	currentSurface = surface;
-}
-
-void setPixel(Uint32 x, Uint32 y, Uint32 pixel) {
-	if (x >= unsigned(currentSurface->w) || y >= unsigned(currentSurface->h)) return;
-
-	Uint32 *target_pixel = (Uint32*)((Uint8*)currentSurface->pixels + y * currentSurface->pitch + x * currentSurface->format->BytesPerPixel);
-	*target_pixel = pixel;
-}
 
 int main(int argc, char* args[]) {
 #define QUIT() { system("pause"); return -1; }
@@ -109,7 +64,13 @@ int main(int argc, char* args[]) {
 	SDL_PauseAudioDevice(deviceId, 0);
 
 	//double currentVolume = 0;
-	SDL_SetRenderDrawColor(renderer, 136, 23, 152, 255);
+
+	double theta = 0;
+	const unsigned drawWidth = 240, drawHeight = 160;
+	auto drawSurface = SDL_CreateRGBSurface(0, drawWidth, drawHeight, 32, 0xff << 16, 0xff << 8, 0xff, 0xff << 24);
+	setCurrentSurface(drawSurface);
+	clearScreen(RGB(0, 255, 23));
+	SDL_SetRenderDrawColor(renderer, 0, 67, 23, 255);
 	SDL_RenderClear(renderer);
 
 	while (!quit && !dftProcessor.wouldOverflowWavFile()) {
@@ -121,7 +82,6 @@ int main(int argc, char* args[]) {
 		// Process frame
 		if (needsRerender) {
 			auto screenSurface = SDL_GetWindowSurface(window);
-			setCurrentSurface(screenSurface);
 
 			//auto& dftOut(dftProcessor.currentDFT());
 			//processor.useConversionToFrequencyDomainValues = true;
@@ -137,25 +97,52 @@ int main(int argc, char* args[]) {
 			//	}
 			//}
 
-			const unsigned BAR_HEIGHT = 4;
-			unsigned y = 0;
+			// 💡 GOOD
+			//const unsigned BAR_HEIGHT = 4;
+			//unsigned y = 0;
+			//auto& dftOut(dftProcessor.currentDFT());
+			//processor.useConversionToFrequencyDomainValues = false;
+			//processor.useWindow = false;
+			//for (unsigned i = 0; i < dftOut.size(); i++) {
+			//	float angle = i * 360.0f / dftOut.size();
+			//	double fraction = double(i) / (dftOut.size() - 1);
+			//	double sample = processor.getDftPointInterpolated(to_array(dftOut), fraction, 50 Hz, wavSpec.freq / 2, false);
+			//	double volume = processor.convertPointToDecibels(sample, 50 DB);
+			//	unsigned vol = unsigned(volume * 256);
+			//	for (unsigned j = 0; j < 256; j++) {
+			//		uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
+			//		for (unsigned k = 0; k < BAR_HEIGHT; k++) {
+			//			setPixel(j, y + k, color);
+			//		}
+			//	}
+			//	y += BAR_HEIGHT;
+			//}
+			// 💡 END GOOD
+
 			auto& dftOut(dftProcessor.currentDFT());
 			processor.useConversionToFrequencyDomainValues = false;
 			processor.useWindow = false;
-			for (unsigned i = 0; i < dftOut.size(); i++) {
-				float angle = i * 360.0f / dftOut.size();
-				double fraction = double(i) / (dftOut.size() - 1);
-				double sample = processor.getDftPointInterpolated(to_array(dftOut), fraction, 50 Hz, wavSpec.freq / 2, false);
-				double volume = processor.convertPointToDecibels(sample, 50 DB);
-				unsigned vol = unsigned(volume * 256);
-				for (unsigned j = 0; j < 256; j++) {
-					uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
-					for (unsigned k = 0; k < BAR_HEIGHT; k++) {
-						setPixel(j, y + k, color);
-					}
-				}
-				y += BAR_HEIGHT;
+
+			for (unsigned k = 0; k < 20; k++) {
+				double rmax = 100, n = 6, d = 8;
+				double r = rmax * cos(n / d * theta);
+				double x = r * cos(theta);
+				double y = r * sin(theta);
+				setPixel(x + drawWidth / 2, y + drawHeight / 2, RGB(255, 255, 255));
+				theta += 0.002;
 			}
+
+			// Dim image weirdly
+			dimScreenWeirdly();
+			//moveScreen(1, 0, 8);
+
+			//Uint32 c1 = RGB(255, 255, 255), c2 = RGB(0, 0, 0);
+			//Uint16 a = 16;
+			//printf("Blending: %08x %08x a=%02x = %08x\n", c1, c2, a, blend(c1, c2, a));
+
+			SDL_Rect srcRect = { 0, 0, drawWidth, drawHeight };
+			SDL_Rect dstRect = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
+			SDL_BlitScaled(drawSurface, &srcRect, screenSurface, &dstRect);
 
 			SDL_UpdateWindowSurface(window);
 			SDL_RenderPresent(renderer);

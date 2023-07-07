@@ -138,7 +138,9 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="DftProcessor.cpp" />
+    <ClCompile Include="Drawing.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Drawing.h" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DftProcessor.h" />
