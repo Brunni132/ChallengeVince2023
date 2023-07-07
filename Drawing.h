@@ -63,8 +63,8 @@ static inline void setPixel(Uint32 x, Uint32 y, Uint32 pixel) {
 	*target_pixel = pixel;
 }
 
-static inline Uint32 getPixel(Uint32 x, Uint32 y) {
-	if (x >= unsigned(drawingSurface->w) || y >= unsigned(drawingSurface->h)) return 0;
+static inline Uint32 getPixel(Uint32 x, Uint32 y, Uint32 colorToReturn = 0) {
+	if (x >= unsigned(drawingSurface->w) || y >= unsigned(drawingSurface->h)) return colorToReturn;
 
 	Uint32* target_pixel = (Uint32*)((Uint8*)drawingSurface->pixels + y * drawingSurface->pitch + x * drawingSurface->format->BytesPerPixel);
 	return *target_pixel;
@@ -95,12 +95,12 @@ static void dimScreenWeirdly() {
 	}
 }
 
-static void moveScreen(int moveX, int moveY, Uint16 alpha = 16) {
+static void moveScreen(int moveX, int moveY, Uint32 fillColor, Uint16 alpha = 16) {
 	for (unsigned y = 0; y < unsigned(drawingSurface->h); y++) {
 		for (unsigned x = 0; x < unsigned(drawingSurface->w); x++) {
 			Uint32 pixel1 = getPixel(x, y);
-			Uint32 pixel2 = getPixel(x - moveX, y - moveY);
-			setPixel(x, y, blend(pixel1, pixel2, alpha));
+			Uint32 pixel2 = getPixel(x - moveX, y - moveY, fillColor);
+			setPixel(x, y, blend(blend(pixel1, pixel2, alpha), fillColor, 1));
 		}
 	}
 }

@@ -6,10 +6,19 @@
 static auto MUSIC_FILENAME = "music-3.wav";
 
 ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor, SDL_AudioSpec& wavSpec) noexcept {
-	createDrawingSurface(240, 160, 3_X);
-	clearScreen(RGB(48, 48, 255));
-
+	const Uint32 colors[] = {
+		RGB(48, 48, 255),
+		RGB(255, 48, 255),
+		RGB(255, 255, 48)
+	};
 	double theta = 0;
+	auto currentColor = [&] {
+		return colors[unsigned(theta / 60) % numberof(colors)];
+	};
+
+	createDrawingSurface(240, 160, 3_X);
+	clearScreen(currentColor());
+
 	unsigned drawWidth = drawingSurface->w, drawHeight = drawingSurface->h;
 	while (true) {
 		auto& dftOut(dftProcessor.currentDFT());
@@ -17,16 +26,19 @@ ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor,
 		processor.useWindow = false;
 
 		for (unsigned k = 0; k < 20; k++) {
-			double rmax = 100, n = 6, d = 8;
+			double rmax = 80, n = 6, d = 8;
 			double r = rmax * cos(n / d * theta);
 			double x = r * cos(theta);
 			double y = r * sin(theta);
 			setPixel(x + drawWidth / 2, y + drawHeight / 2, RGB(255, 255, 255));
-			theta += 0.002;
+			theta += 0.004;
 		}
 
+		printf("Theta: %f\n", theta);
+
 		// Dim image weirdly
-		dimScreenWeirdly();
+		//dimScreenWeirdly();
+		moveScreen(1, 0, currentColor());
 		co_await std::suspend_always{};
 	}
 }
@@ -55,7 +67,8 @@ ReturnObject drawWithSmoothGraph(DftProcessorForWav& dftProcessor, DftProcessor&
 }
 
 ReturnObject drawWithBars(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
-	createDrawingSurface(480, 320, 1_X);
+	bool useLinearScale = true;
+	createDrawingSurface(256, 256, 2_X);
 	clearScreen(RGB(48, 48, 255));
 
 	while (true) {
@@ -68,8 +81,15 @@ ReturnObject drawWithBars(DftProcessorForWav& dftProcessor, DftProcessor& proces
 			float angle = i * 360.0f / dftOut.size();
 			double fraction = double(i) / (dftOut.size() - 1);
 			double sample = processor.getDftPointInterpolated(to_array(dftOut), fraction, 50_Hz, wavSpec.freq / 2, false);
-			double volume = processor.convertPointToDecibels(sample, 50_DB);
-			unsigned vol = unsigned(volume * 256);
+			unsigned vol;
+			if (useLinearScale) {
+				// Division by 60 because sometimes it goes slightly over 0
+				vol = fmax(0, sample + 50) * 256 / 60;
+			}
+			else {
+				double volume = processor.convertPointToDecibels(sample, 50_DB);
+				vol = unsigned(volume * 256);
+			}
 			for (unsigned j = 0; j < 256; j++) {
 				uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
 				for (unsigned k = 0; k < BAR_HEIGHT; k++) {
