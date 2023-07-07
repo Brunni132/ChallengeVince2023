@@ -2,7 +2,6 @@
 
 const unsigned SCREEN_WIDTH = 640, SCREEN_HEIGHT = 360;
 static auto MUSIC_FILENAME = "music-3.wav";
-static const double MIN_DECIBELS = 60;
 static const double TWENTY_OVER_LOG_10 = 20 / log(10);
 
 SDL_Surface *currentSurface;
@@ -124,10 +123,13 @@ int main(int argc, char* args[]) {
 			auto screenSurface = SDL_GetWindowSurface(window);
 			setCurrentSurface(screenSurface);
 
+			//auto& dftOut(dftProcessor.currentDFT());
+			//processor.useConversionToFrequencyDomainValues = true;
+			//processor.useWindow = false;
 			//for (unsigned i = 0; i < 256; i++) {
 			//	float angle = i * 320.0f / 256;
-			//	double dftValue = getDftPointInterpolated(dftOut, i / 256.0, 80, wavSpec.freq, true);
-			//	double volume = convertPointToDecibels(dftValue, MIN_DECIBELS);
+			//	double dftValue = processor.getDftPointInterpolated(to_array(dftOut), i / 256.0, 50 Hz, wavSpec.freq / 2, true);
+			//	double volume = processor.convertPointToDecibels(dftValue, 80 DB);
 			//	unsigned vol = unsigned(volume * 256);
 			//	for (unsigned j = 0; j < 256; j++) {
 			//		uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
@@ -137,11 +139,13 @@ int main(int argc, char* args[]) {
 
 			const unsigned BAR_HEIGHT = 4;
 			unsigned y = 0;
-			const vector<double>& dftOut(dftProcessor.lastProcessDFTResult());
+			auto& dftOut(dftProcessor.currentDFT());
+			processor.useConversionToFrequencyDomainValues = false;
+			processor.useWindow = false;
 			for (unsigned i = 0; i < dftOut.size(); i++) {
 				float angle = i * 360.0f / dftOut.size();
 				double fraction = double(i) / (dftOut.size() - 1);
-				double sample = processor.getDftPointInterpolated(&dftOut[0], fraction, 50 Hz, wavSpec.freq / 2, false);
+				double sample = processor.getDftPointInterpolated(to_array(dftOut), fraction, 50 Hz, wavSpec.freq / 2, false);
 				double volume = processor.convertPointToDecibels(sample, 50 DB);
 				unsigned vol = unsigned(volume * 256);
 				for (unsigned j = 0; j < 256; j++) {

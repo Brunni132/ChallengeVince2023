@@ -13,13 +13,15 @@ static inline double toDecibels(double sample) {
 DftProcessor::DftProcessor(unsigned samplesPerIteration)
 	: inSamplesPerIteration(samplesPerIteration),
 	outSamplesPerIteration(samplesPerIteration / 2 + 1),
-	REX(outSamplesPerIteration), IMX(outSamplesPerIteration), samples(inSamplesPerIteration)
+	REX(outSamplesPerIteration), IMX(outSamplesPerIteration), samples(inSamplesPerIteration),
+	useConversionToFrequencyDomainValues(false),
+	useWindow(false)
 {
 }
 
 // inData is stereo, 16-bit data (L R L R, etc.)
 // ⚠ useWindow method is not complete, it is valid only for the first half of the output samples; we should make a second pass, in which we shift the second part and process again, giving us a second first half that can be used.
-void DftProcessor::processDFT(const int16_t* inData, double* outData, bool useConversionToFrequencyDomainValues, bool useWindow) {
+void DftProcessor::processDFT(const int16_t* inData, double* outData) {
 	// Zero REX & IMX so they can be used as accumulators
 	for (unsigned k = 0; k < outSamplesPerIteration; k++) {
 		REX[k] = IMX[k] = 0;
@@ -95,7 +97,6 @@ double DftProcessor::getDftPointInterpolated(const double* dftOutData, double po
 	else {
 		frequencyEquivalentInFft = positionInSpectrumBetween0And1 * (outSamplesPerIteration - 1);
 	}
-	//printf("getDftPointInterpolated: %f -> %f, entry = %d (%f) %d\n", positionInSpectrumBetween0And1, frequency, integerIndexValue, realIndexValue, nextIndexValue);
 
 	// Interpolate in the DFT table
 	unsigned integerIndexValue = unsigned(frequencyEquivalentInFft);
@@ -132,10 +133,10 @@ void DftProcessorForWav::processDFTInChunksAndSmooth(unsigned processingChunks, 
 		if (wouldOverflowWavFile()) return;
 
 		if (i == 0) {
-			processor.processDFT(wavBuffer + waveBufferOffset * wavSpec.channels, &nextValues[0]);
+			processor.processDFT(wavBuffer + waveBufferOffset * wavSpec.channels, to_array(nextValues));
 		}
 		else {
-			processor.processDFT(wavBuffer + waveBufferOffset * wavSpec.channels, &temp[0]);
+			processor.processDFT(wavBuffer + waveBufferOffset * wavSpec.channels, to_array(temp));
 			for (unsigned i = 0; i < processor.outSamplesPerIteration; i++) nextValues[i] = fmax(nextValues[i], temp[i]);
 		}
 
@@ -147,7 +148,7 @@ void DftProcessorForWav::processDFTInChunksAndSmooth(unsigned processingChunks, 
 	}
 }
 
-const vector<double>& DftProcessorForWav::lastProcessDFTResult() {
+const vector<double>& DftProcessorForWav::currentDFT() {
 	return dftOut;
 }
 
@@ -173,6 +174,6 @@ void DftProcessorForWav::processVolumeOnly(unsigned processingChunks, double alp
 }
 
 void DftProcessorForWav::processDFT() {
-	processor.processDFT(wavBuffer + waveBufferOffset * wavSpec.channels, &dftOut[0]);
+	processor.processDFT(wavBuffer + waveBufferOffset * wavSpec.channels, to_array(dftOut));
 	waveBufferOffset += processor.inSamplesPerIteration;
 }

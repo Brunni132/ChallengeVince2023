@@ -13,6 +13,9 @@ using std::vector;
 
 #define stackArray(type, count)	((type*)alloca(sizeof(type) * count))
 
+template <typename T> T* to_array(vector<T>& a) { return &a[0]; }
+template <typename T> const T* to_array(const vector<T>& a) { return &a[0]; }
+
 template <typename T, unsigned N> constexpr unsigned numberof(const T(&)[N]) { return N; }
 
 #define DB
@@ -21,12 +24,16 @@ template <typename T, unsigned N> constexpr unsigned numberof(const T(&)[N]) { r
 struct DftProcessor {
 	DftProcessor(unsigned samplesPerIteration);
 
-	void processDFT(const int16_t* inData, double* outData, bool useConversionToFrequencyDomainValues = false, bool useWindow = false);
+	void processDFT(const int16_t* inData, double* outData);
 	double processVolume(const int16_t* inData);
 	double getDftPointInterpolated(const double* dftOutData, double positionInSpectrumBetween0And1, unsigned minFrequency, unsigned maxFrequency, bool useLogarithmicScale);
 	static double convertPointToDecibels(double sample, double cutoffDbLevel);
 
 	const unsigned inSamplesPerIteration, outSamplesPerIteration;
+
+	// Can be set freely
+	bool useConversionToFrequencyDomainValues;
+	bool useWindow;
 
 private:
 	vector<double> REX, IMX, samples;
@@ -44,7 +51,7 @@ struct DftProcessorForWav {
 	void processDFT();
 	void processDFTInChunksAndSmooth(unsigned processingChunks, double alpha);
 	void processVolumeOnly(unsigned processingChunks, double alpha);
-	const vector<double>& lastProcessDFTResult();
+	const vector<double>& currentDFT();
 	bool wouldOverflowWavFile();
 
 private:
