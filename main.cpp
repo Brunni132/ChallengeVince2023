@@ -4,7 +4,7 @@
 #include "Coroutines.h"
 
 #define DRAWING_ROUTINE_TO_USE drawShit2
-static auto DEFAULT_MUSIC_FILENAME = "music-3.wav";
+static auto DEFAULT_MUSIC_FILENAME = "music-2.wav";
 unsigned processChunksAtOnce = 6;
 bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
 

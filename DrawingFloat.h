@@ -20,6 +20,11 @@ struct Color {
 	Color subtract(Color other) {
 		return Color(r - other.r, g - other.g, b - other.b);
 	}
+	Color blend(Color pixel2, DrawingSurfacePrecision alphaPixel2 = 128) {
+		alphaPixel2 /= 256.0;
+		DrawingSurfacePrecision alphaPixel1 = 1 - alphaPixel2;
+		return Color(pixel2.r * alphaPixel2 + r * alphaPixel1, pixel2.g * alphaPixel2 + g * alphaPixel1, pixel2.b * alphaPixel2 + b * alphaPixel1);
+	}
 };
 
 struct DrawingSurface {
@@ -138,12 +143,6 @@ static Uint32 HSV(float H, float S, float V) {
 	return RGB(int((r + m) * 255), int((g + m) * 255), int((b + m) * 255));
 }
 
-static inline Color blend(Color pixel1, Color pixel2, DrawingSurfacePrecision alphaPixel2) {
-	alphaPixel2 /= 256.0;
-	DrawingSurfacePrecision alphaPixel1 = 1 - alphaPixel2;
-	return Color(pixel2.r * alphaPixel2 + pixel1.r * alphaPixel1, pixel2.g * alphaPixel2 + pixel1.g * alphaPixel1, pixel2.b * alphaPixel2 + pixel1.b * alphaPixel1);
-}
-
 struct ScreenMover {
 	double positionX = 0, positionY = 0;
 
@@ -159,7 +158,7 @@ struct ScreenMover {
 				for (unsigned x = 0; x < unsigned(drawingSurface->w); x++) {
 					Color pixel1 = drawingSurface->getPixel(x, y);
 					Color pixel2 = drawingSurface->getPixel(x - moveX, y - moveY, fillColor);
-					drawingSurface->setPixel(x, y, blend(pixel1, pixel2, alpha));
+					drawingSurface->setPixel(x, y, pixel1.blend(pixel2, alpha));
 				}
 			}
 		}
