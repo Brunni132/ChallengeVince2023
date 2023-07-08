@@ -3,7 +3,7 @@
 #include "DrawingFloat.h"
 #include "Coroutines.h"
 
-#define DRAWING_ROUTINE_TO_USE drawShit3
+#define DRAWING_ROUTINE_TO_USE drawShit2
 static auto DEFAULT_MUSIC_FILENAME = "music-3.wav";
 unsigned processChunksAtOnce = 6;
 bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
@@ -57,6 +57,7 @@ ReturnObject drawShit1(DftProcessorForWav &dftProcessor, DftProcessor &processor
 		processor.useConversionToFrequencyDomainValues = false;
 		processor.useWindow = false;
 
+		// https://www.asc.ohio-state.edu/orban.14/math_coding/rose/rose.html
 		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
 		Color color(currentAccentColor());
 		for (unsigned k = 0; k < 40; k++) {
@@ -114,13 +115,53 @@ ReturnObject drawShit2(DftProcessorForWav& dftProcessor, DftProcessor& processor
 	}
 }
 
-ReturnObject drawShit3(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+ReturnObject drawShit3RGB(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+	double screenAngle = 0;
+	double theta = 0;
+	auto currentColor = [&] {
+		return Color(64, 64, 64);
+	};
+	ScreenMover screen;
+	auto& ds = createDrawingSurface(240, 160, 3_X);
+	ds.clearScreen(currentColor());
+	ds.protectOverflow = true;
+	ds.useHsl = false;
+	processChunksAtOnce = 1;
+	wantsFullFrequencies = false;
+
+
+	while (true) {
+		auto& dftOut(dftProcessor.currentDFT());
+		processor.useConversionToFrequencyDomainValues = false;
+		processor.useWindow = false;
+
+		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
+		for (unsigned k = 0; k < 15; k++) {
+			double rmax = volume * 160, n = 6, d = 8;
+			double r = rmax * cos(n / d * theta);
+			double x = r * cos(theta);
+			double y = r * sin(theta);
+			Uint32 color = HSV(fmodf(theta * 360, 360), 100, 100);
+			for (unsigned i = 0; i < 2; i++)
+				for (unsigned j = 0; j < 2; j++)
+					ds.setPixel(x + ds.w / 2 + i, y + ds.h / 2 + j, color);
+			theta += 0.004;
+		}
+
+		screenAngle += 0.0003;
+		screen.addMove(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
+		screen.performMove(currentColor(), 32);
+		co_await std::suspend_always{};
+	}
+}
+
+ReturnObject drawShit3HSL(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
 	double screenAngle = 0;
 	double theta = 0;
 	auto currentColor = [&] {
 		return Color(0, 0, 0);
 	};
-	ScreenMover screen;
+	ScreenMoverHSL screen;
 	auto& ds = createDrawingSurface(240, 160, 3_X);
 	ds.clearScreen(currentColor());
 	ds.protectOverflow = true;
@@ -140,7 +181,10 @@ ReturnObject drawShit3(DftProcessorForWav& dftProcessor, DftProcessor& processor
 			double r = rmax * cos(n / d * theta);
 			double x = r * cos(theta);
 			double y = r * sin(theta);
-			ds.setPixel(x + ds.w / 2, y + ds.h / 2, Color(fmodf(theta, 1), 1, 0.5f));
+			Color color(fmodf(theta, 1), 1, .5f);
+			for (unsigned i = 0; i < 2; i++)
+				for (unsigned j = 0; j < 2; j++)
+					ds.setPixel(x + ds.w / 2 + i, y + ds.h / 2 + j, color);
 			theta += 0.004;
 		}
 
@@ -150,6 +194,7 @@ ReturnObject drawShit3(DftProcessorForWav& dftProcessor, DftProcessor& processor
 		co_await std::suspend_always{};
 	}
 }
+
 
 //ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor, SDL_AudioSpec& wavSpec) noexcept {
 //	const Uint32 colors[] = {

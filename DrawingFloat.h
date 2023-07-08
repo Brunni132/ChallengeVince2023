@@ -224,3 +224,27 @@ struct ScreenMover {
 		}
 	}
 };
+
+struct ScreenMoverHSL {
+	double positionX = 0, positionY = 0;
+
+	void addMove(double deltaX, double deltaY) {
+		positionX += deltaX, positionY += deltaY;
+	}
+
+	void performMove(Color fillColor, float alpha = 16) {
+		int moveX = int(fmax(-1, fmin(+1, positionX))), moveY = int(fmax(-1, fmin(+1, positionY)));
+		positionX -= moveX, positionY -= moveY;
+		if (moveX || moveY) {
+			for (unsigned y = 0; y < unsigned(drawingSurface->h); y++) {
+				for (unsigned x = 0; x < unsigned(drawingSurface->w); x++) {
+					Color pixel1 = drawingSurface->getPixel(x, y);
+					Color pixel2 = drawingSurface->getPixel(x - moveX, y - moveY, fillColor);
+					pixel2.components[0] = pixel1.components[0];
+					pixel2.components[1] = pixel1.components[1];
+					drawingSurface->setPixel(x, y, pixel1.blend(pixel2, alpha).blend(Color(0, 0, 0), 2));
+				}
+			}
+		}
+	}
+};
