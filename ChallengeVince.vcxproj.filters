@@ -27,6 +27,9 @@
     <ClCompile Include="Coroutines.h">
       <Filter>Header Files</Filter>
     </ClCompile>
+    <ClCompile Include="DrawingFloat.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DftProcessor.h">
@@ -34,6 +37,9 @@
     </ClInclude>
     <ClInclude Include="Ref.h">
       <Filter>Source Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DrawingFloat.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
 </Project>

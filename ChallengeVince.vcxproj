@@ -143,11 +143,13 @@
   <ItemGroup>
     <ClCompile Include="Coroutines.h" />
     <ClCompile Include="DftProcessor.cpp" />
+    <ClCompile Include="DrawingFloat.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="DrawingSurface.h" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DftProcessor.h" />
+    <ClInclude Include="DrawingFloat.h" />
     <ClInclude Include="Ref.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

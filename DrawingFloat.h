@@ -3,51 +3,58 @@
 #include <memory.h>
 #include <functional>
 
-typedef float DrawingSurfacePrecision;
-
 struct Color {
-	DrawingSurfacePrecision r, g, b;
+	float components[3];
 
 	Color() {}
 
-	Color(DrawingSurfacePrecision r, DrawingSurfacePrecision g, DrawingSurfacePrecision b) : r(r), g(g), b(b) {}
+	Color(float r, float g, float b) : components { r, g, b } {}
 
-	Color(Uint32 sdlColor) : r(DrawingSurfacePrecision(sdlColor >> 16 & 0xff)), g(DrawingSurfacePrecision(sdlColor >> 8 & 0xff)), b(DrawingSurfacePrecision(sdlColor & 0xff)) {}
+	Color(Uint32 sdlColor);
+
+	inline float& r() { return components[0]; }
+	inline float& g() { return components[1]; }
+	inline float& b() { return components[2]; }
+	inline float& h() { return components[0]; }
+	inline float& s() { return components[1]; }
+	inline float& l() { return components[2]; }
 
 	Color add(Color other) {
-		return Color(r + other.r, g + other.g, b + other.b);
+		return Color(components[0] + other.components[0], components[1] + other.components[1], components[2] + other.components[2]);
 	}
 	Color subtract(Color other) {
-		return Color(r - other.r, g - other.g, b - other.b);
+		return Color(components[0] - other.components[0], components[1] - other.components[1], components[2] - other.components[2]);
 	}
-	Color blend(Color pixel2, DrawingSurfacePrecision alphaPixel2 = 128) {
+	Color blend(Color pixel2, float alphaPixel2 = 128) {
 		alphaPixel2 /= 256.0;
-		DrawingSurfacePrecision alphaPixel1 = 1 - alphaPixel2;
-		return Color(pixel2.r * alphaPixel2 + r * alphaPixel1, pixel2.g * alphaPixel2 + g * alphaPixel1, pixel2.b * alphaPixel2 + b * alphaPixel1);
+		float alphaPixel1 = 1 - alphaPixel2;
+		return Color(pixel2.components[0] * alphaPixel2 + components[0] * alphaPixel1, pixel2.components[1] * alphaPixel2 + components[1] * alphaPixel1, pixel2.components[2] * alphaPixel2 + components[2] * alphaPixel1);
 	}
 };
 
 struct DrawingSurface {
 	SDL_Surface* sdlSurface;
-	DrawingSurfacePrecision* pixels;
+	float* pixels;
 	unsigned w, h, pitch;
 	bool protectOverflow;
+	bool useHsl; // false = rgb, true = hsl
 
 	DrawingSurface(SDL_Surface * surface) : w(surface->w), h(surface->h), pitch(surface->pitch), sdlSurface(surface) {
 		if (pitch < w * 4) throw "Error with pixel format, make sure that you use 32 bits";
-		pixels = new DrawingSurfacePrecision[h * pitch];
+		pixels = new float[h * pitch];
 		protectOverflow = false;
+		useHsl = false;
 	}
 
 	~DrawingSurface() { delete[] pixels; }
 
 	void clearScreen(Color color) {
 		unsigned size = pitch * h / 4;
-		DrawingSurfacePrecision* ptr = pixels;
+		float* ptr = pixels;
 		while (size-- > 0) {
-			*ptr++ = color.r;
-			*ptr++ = color.g;
-			*ptr++ = color.b;
+			*ptr++ = color.components[0];
+			*ptr++ = color.components[1];
+			*ptr++ = color.components[2];
 			ptr++;
 		}
 	}
@@ -55,25 +62,77 @@ struct DrawingSurface {
 	void setPixel(unsigned x, unsigned y, Color color) {
 		if (x >= w || y >= h) return;
 
-		DrawingSurfacePrecision* ptr = pixels + y * pitch + x * 4;
-		*ptr++ = color.r;
-		*ptr++ = color.g;
-		*ptr++ = color.b;
+		float* ptr = pixels + y * pitch + x * 4;
+		*ptr++ = color.components[0];
+		*ptr++ = color.components[1];
+		*ptr++ = color.components[2];
 	}
 
 	Color getPixel(unsigned x, unsigned y, Color defaultColor = Color()) {
 		if (x >= w || y >= h) return defaultColor;
 
-		DrawingSurfacePrecision* ptr = pixels + y * pitch + x * 4;
+		float* ptr = pixels + y * pitch + x * 4;
 		return Color(ptr[0], ptr[1], ptr[2]);
 	}
 
+	static float hue2rgb(float p, float q, float t) {
+		if (t < 0)
+			t += 1;
+		if (t > 1)
+			t -= 1;
+		if (t < float(1. / 6))
+			return p + (q - p) * 6 * t;
+		if (t < float(1. / 2))
+			return q;
+		if (t < float(2. / 3))
+			return p + (q - p) * (float(2. / 3) - t) * 6;
+		return p;
+	}
+
+	static inline float computeSaturatedL(float s, float l) {
+		if (s > 1) {
+			if (l < 0.5f) {
+				l *= s;
+				if (l >= 0.5f) l = 0.5f;
+			}
+			else {
+				l = 1 - ((1 - l) * s);
+				if (l <= 0.5f) l = 0.5f;
+			}
+		}
+		return l;
+	}
+
+	static inline float clamp(float v) {
+		if (v < 0) return 0;
+		if (v > 1) return 1;
+		return v;
+	}
+
 	void blitToSdlSurface() {
-		DrawingSurfacePrecision* srcPtr = pixels;
+		float* srcPtr = pixels;
 		Uint32* dstPtr = (Uint32*)sdlSurface->pixels;
 		void* dstPtrEnd = (Uint8*)dstPtr + pitch * h;
 
-		if (protectOverflow) {
+		if (useHsl) {
+			while ((void*)dstPtr < dstPtrEnd) {
+				//float h = fmodf(srcPtr[0], 1);
+				//float l = fminf(1, fmaxf(0, srcPtr[2]));
+				//float s = fminf(1, fmaxf(0, srcPtr[1]));
+				float h = protectOverflow ? fmodf(srcPtr[0], 1) : srcPtr[0];
+				float s = protectOverflow ? clamp(srcPtr[1]) : srcPtr[1];
+				float l = protectOverflow ? clamp(computeSaturatedL(srcPtr[1], srcPtr[2])) : srcPtr[2];
+
+				float q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+				float p = 2 * l - q;
+				*dstPtr++ = 0xff << 24 |
+					Uint8(hue2rgb(p, q, h + float(1. / 3)) * 255) << 16 |
+					Uint8(hue2rgb(p, q, h) * 255) << 8 |
+					Uint8(hue2rgb(p, q, h - float(1. / 3)) * 255);
+				srcPtr += 4;
+			}
+		}
+		else if (protectOverflow) {
 			while ((void*)dstPtr < dstPtrEnd) {
 				int r = int(srcPtr[0]), g = int(srcPtr[1]), b = int(srcPtr[2]);
 				if (r < 0) r = 0; if (r > 255) r = 255;
@@ -94,9 +153,9 @@ struct DrawingSurface {
 
 static const bool isSDLSurface;
 
-static DrawingSurface* drawingSurface;
-static SDL_Surface* sdlDrawingSurface;
-static SDL_Window* window;
+extern DrawingSurface* drawingSurface;
+extern SDL_Surface* sdlDrawingSurface;
+extern SDL_Window* window;
 static unsigned SCREEN_WIDTH = 240 * 3, SCREEN_HEIGHT = 160 * 3;
 
 static inline unsigned operator"" _X(unsigned long long val) { return unsigned(val); }
@@ -110,6 +169,7 @@ static DrawingSurface& createDrawingSurface(unsigned width, unsigned height, uns
 	return *drawingSurface;
 }
 
+// Can only be used if the DrawingSurface::useHsl is set to false
 static Uint32 RGBA(int r, int g, int b, int a) {
 	if (r < 0) r = 0;
 	else if (r > 255) r = 255;
@@ -150,7 +210,7 @@ struct ScreenMover {
 		positionX += deltaX, positionY += deltaY;
 	}
 
-	void performMove(Color fillColor, DrawingSurfacePrecision alpha = 16) {
+	void performMove(Color fillColor, float alpha = 16) {
 		int moveX = int(fmax(-1, fmin(+1, positionX))), moveY = int(fmax(-1, fmin(+1, positionY)));
 		positionX -= moveX, positionY -= moveY;
 		if (moveX || moveY) {

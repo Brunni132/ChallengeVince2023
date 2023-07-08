@@ -3,24 +3,46 @@
 #include "DrawingFloat.h"
 #include "Coroutines.h"
 
-#define DRAWING_ROUTINE_TO_USE drawShit2
-static auto DEFAULT_MUSIC_FILENAME = "music-2.wav";
+#define DRAWING_ROUTINE_TO_USE drawShit3
+static auto DEFAULT_MUSIC_FILENAME = "music-3.wav";
 unsigned processChunksAtOnce = 6;
 bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
+
+
+ReturnObject drawWithHSLFramebuffer(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+	auto& ds = createDrawingSurface(240, 160, 3_X);
+	ds.protectOverflow = true;
+	ds.useHsl = true;
+	processChunksAtOnce = 3;
+	wantsFullFrequencies = false;
+
+	double s = 0;
+	while (true) {
+		for (unsigned y = 0; y < ds.h; y++) {
+			float level = float(y) / ds.h;
+			for (unsigned x = 0; x < ds.w; x++) {
+				float hlevel = float(x) / ds.w;
+				ds.setPixel(x, y, Color(s, hlevel, level));
+			}
+		}
+		s += 0.001;
+
+		co_await std::suspend_always{};
+	}
+}
 
 /*
  *	Idées:
  *  1. Utiliser le HSV pour faire un effet où les pixels sont colorés au centre puis à mesure qu'ils s'éloignent perdent leur saturation (mais gardent leur valeur), ou l'inverse.
- *     Note: je pourrais aussi faire un framebuffer en HSV tant qu'à faire (r=H, g=S, b=V), et Color(Uint32) fait une conversion RGB -> HSV.
  *  2. Effet simple de découpage de l'écran en 2, on dessine une wave et tout bouge en haut et en bas à chaque frame, sans blending/flou. La vitesse dépend du volume global (peut-être changer l'API pour avoir les 2).
  */
-ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor, SDL_AudioSpec& wavSpec) noexcept {
+ReturnObject drawShit1(DftProcessorForWav &dftProcessor, DftProcessor &processor, SDL_AudioSpec& wavSpec) noexcept {
 	double theta = 0;
 	auto currentColor = [&] {
-		return HSV(int(theta / 4) % 360, 100, 50);
+		return HSV(fmodf(theta / 4, 360), 100, 50);
 	};
 	auto currentAccentColor = [&] {
-		return HSV(int(theta / 4 + 180) % 360, 50, 100);
+		return HSV(fmodf(theta / 4 + 180, 360), 50, 100);
 	};
 
 	auto& ds = createDrawingSurface(240, 160, 3_X);
@@ -56,10 +78,10 @@ ReturnObject drawShit2(DftProcessorForWav& dftProcessor, DftProcessor& processor
 	double screenAngle = 0;
 	double theta = 0;
 	auto currentColor = [&] {
-		return HSV(int(theta / 4) % 360, 100, 50);
+		return HSV(fmodf(theta / 4, 360), 100, 50);
 	};
 	auto currentAccentColor = [&] {
-		return HSV(int(theta / 4 + 180) % 360, 50, 100);
+		return HSV(fmodf(theta / 4 + 180, 360), 50, 100);
 	};
 	ScreenMover screen;
 	auto& ds = createDrawingSurface(240, 160, 3_X);
@@ -82,6 +104,43 @@ ReturnObject drawShit2(DftProcessorForWav& dftProcessor, DftProcessor& processor
 			double x = r * cos(theta);
 			double y = r * sin(theta);
 			ds.setPixel(x + ds.w / 2, y + ds.h / 2, Color(128, 128, 128).add(color));
+			theta += 0.004;
+		}
+
+		screenAngle += 0.0003;
+		screen.addMove(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
+		screen.performMove(currentColor(), 40);
+		co_await std::suspend_always{};
+	}
+}
+
+ReturnObject drawShit3(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+	double screenAngle = 0;
+	double theta = 0;
+	auto currentColor = [&] {
+		return Color(0, 0, 0);
+	};
+	ScreenMover screen;
+	auto& ds = createDrawingSurface(240, 160, 3_X);
+	ds.clearScreen(currentColor());
+	ds.protectOverflow = true;
+	ds.useHsl = true;
+	processChunksAtOnce = 1;
+	wantsFullFrequencies = false;
+
+
+	while (true) {
+		auto& dftOut(dftProcessor.currentDFT());
+		processor.useConversionToFrequencyDomainValues = false;
+		processor.useWindow = false;
+
+		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
+		for (unsigned k = 0; k < 15; k++) {
+			double rmax = volume * 160, n = 6, d = 8;
+			double r = rmax * cos(n / d * theta);
+			double x = r * cos(theta);
+			double y = r * sin(theta);
+			ds.setPixel(x + ds.w / 2, y + ds.h / 2, Color(fmodf(theta, 1), 1, 0.5f));
 			theta += 0.004;
 		}
 
