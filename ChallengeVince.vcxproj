@@ -75,8 +75,8 @@
     <LibraryPath>$(SolutionDir)\SDL2-2.27.1\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>C:\Users\Florian\Software\SDL2-2.27.1\include;$(IncludePath)</IncludePath>
-    <LibraryPath>C:\Users\Florian\Software\SDL2-2.27.1\lib\x64;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(SolutionDir)\SDL2-2.27.1\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)\SDL2-2.27.1\lib\x64;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

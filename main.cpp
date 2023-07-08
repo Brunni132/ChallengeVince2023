@@ -2,16 +2,16 @@
 //#include "DrawingSurface.h"
 #include "DrawingFloat.h"
 #include "Coroutines.h"
-#include <functional>
 
 #define DRAWING_ROUTINE_TO_USE drawShit2
-static auto MUSIC_FILENAME = "music-2.wav";
+static auto DEFAULT_MUSIC_FILENAME = "music-3.wav";
 unsigned processChunksAtOnce = 6;
 bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
 
 /*
  *	Idées:
  *  1. Utiliser le HSV pour faire un effet où les pixels sont colorés au centre puis à mesure qu'ils s'éloignent perdent leur saturation (mais gardent leur valeur), ou l'inverse.
+ *     Note: je pourrais aussi faire un framebuffer en HSV tant qu'à faire (r=H, g=S, b=V), et Color(Uint32) fait une conversion RGB -> HSV.
  *  2. Effet simple de découpage de l'écran en 2, on dessine une wave et tout bouge en haut et en bas à chaque frame, sans blending/flou. La vitesse dépend du volume global (peut-être changer l'API pour avoir les 2).
  */
 ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor, SDL_AudioSpec& wavSpec) noexcept {
@@ -29,7 +29,7 @@ ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor,
 	processChunksAtOnce = 3;
 	wantsFullFrequencies = false;
 
-	int frameNo = 0;
+	ScreenMover screen;
 	while (true) {
 		auto& dftOut(dftProcessor.currentDFT());
 		processor.useConversionToFrequencyDomainValues = false;
@@ -46,14 +46,14 @@ ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor,
 			theta += 0.004;
 		}
 
-		if (frameNo++ % 2 == 1) {
-			moveScreen(1, 0, currentColor(), 40);
-		}
+		screen.addMove(0.5, 0);
+		screen.performMove(currentColor(), 40);
 		co_await std::suspend_always{};
 	}
 }
 
 ReturnObject drawShit2(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+	double screenAngle = 0;
 	double theta = 0;
 	auto currentColor = [&] {
 		return HSV(int(theta / 4) % 360, 100, 50);
@@ -61,15 +61,13 @@ ReturnObject drawShit2(DftProcessorForWav& dftProcessor, DftProcessor& processor
 	auto currentAccentColor = [&] {
 		return HSV(int(theta / 4 + 180) % 360, 50, 100);
 	};
-
+	ScreenMover screen;
 	auto& ds = createDrawingSurface(240, 160, 3_X);
 	ds.clearScreen(currentColor());
 	ds.protectOverflow = true;
 	processChunksAtOnce = 1;
 	wantsFullFrequencies = false;
 
-	double screenAngle = 0;
-	MoveTracker screen;
 
 	while (true) {
 		auto& dftOut(dftProcessor.currentDFT());
@@ -88,10 +86,8 @@ ReturnObject drawShit2(DftProcessorForWav& dftProcessor, DftProcessor& processor
 		}
 
 		screenAngle += 0.0003;
-		screen.move(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
-		screen.checkMoveNeeded([&](int x, int y) {
-			moveScreen(x, y, currentColor(), 40);
-		});
+		screen.addMove(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
+		screen.performMove(currentColor(), 40);
 		co_await std::suspend_always{};
 	}
 }
@@ -218,11 +214,19 @@ int main(int argc, char* args[]) {
 	SDL_AudioSpec wavSpec;
 	uint32_t wavLength;
 	uint8_t* wavBuffer;
+	char fileName[4096];
+
+	if (argc == 2) {
+		strcpy_s(fileName, args[1]);
+	} else {
+		strcpy_s(fileName, DEFAULT_MUSIC_FILENAME);
+		fprintf(stdout, "Note: you can pass the wav file to play as an argument (drag & drop on the executable)\nPlaying %s by default.\n", fileName);
+	}
 
 	SDL_Init(SDL_INIT_AUDIO);
-	auto audioSpec = SDL_LoadWAV(MUSIC_FILENAME, &wavSpec, &wavBuffer, &wavLength);
+	auto audioSpec = SDL_LoadWAV(fileName, &wavSpec, &wavBuffer, &wavLength);
 	if (!audioSpec) {
-		fprintf(stderr, "Failed to load WAV file\n");
+		fprintf(stderr, "Failed to load WAV file %s\n", fileName);
 		QUIT();
 	}
 
@@ -301,24 +305,29 @@ int main(int argc, char* args[]) {
 			}
 		}
 
-		// Wait until we have played the whole DFT'ed sample
+		// Wait until we have played the whole DFT'ed sample	
 		double time = getTime();
-		unsigned processed = 0;
-		while ((time - lastProcessedTime) * wavSpec.freq >= processor.inSamplesPerIteration * processChunksAtOnce) {
-			lastProcessedTime += double(processor.inSamplesPerIteration * processChunksAtOnce) / wavSpec.freq;
-			if (wantsFullFrequencies) {
-				dftProcessor.processDFTInChunksAndSmooth(processChunksAtOnce, 0.2);
+		unsigned samplesPerProcessing = processor.inSamplesPerIteration * processChunksAtOnce;
+		auto processIfNecessary = [&] {
+			if ((time - lastProcessedTime) * wavSpec.freq >= samplesPerProcessing) {
+				lastProcessedTime += double(processor.inSamplesPerIteration * processChunksAtOnce) / wavSpec.freq;
+				if (wantsFullFrequencies) {
+					dftProcessor.processDFTInChunksAndSmooth(processChunksAtOnce, 0.2);
+				}
+				else {
+					dftProcessor.processVolumeOnly(processChunksAtOnce, 0.2);
+				}
+
+				needsRerender = true;
+				return true;
 			}
-			else {
-				dftProcessor.processVolumeOnly(processChunksAtOnce, 0.2);
-			}
-			
-			processed += 1;
-			needsRerender = true;
+			return false;
+		};
+		processIfNecessary();
+		if ((time - lastProcessedTime) * wavSpec.freq >= samplesPerProcessing * 20) {
+			printf("Warning: lagging (lateness: %dx)\n", int((time - lastProcessedTime) * wavSpec.freq / samplesPerProcessing));
+			while (processIfNecessary());
 		}
-		//if (processed > 1) {
-		//	printf("Warning: is lagging (frameskip=%d)\n", processed - 1);
-		//}
 
 		SDL_Delay(1);
 	}
