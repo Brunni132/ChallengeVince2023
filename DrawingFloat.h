@@ -2,6 +2,21 @@
 #include <SDL.h>
 #include <memory.h>
 
+struct MoveTracker {
+	double positionX = 0, positionY = 0;
+
+	void move(double deltaX, double deltaY) {
+		positionX += deltaX, positionY += deltaY;
+	}
+
+	void checkMoveNeeded(std::function<void(int, int)> doMove) {
+		int movingX = int(fmax(-1, fmin(+1, positionX))), movingY = int(fmax(-1, fmin(+1, positionY)));
+		positionX -= movingX, positionY -= movingY;
+		if (movingX || movingY)
+			doMove(movingX, movingY);
+	}
+};
+
 typedef float DrawingSurfacePrecision;
 
 struct Color {

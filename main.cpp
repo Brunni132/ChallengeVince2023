@@ -9,21 +9,11 @@ static auto MUSIC_FILENAME = "music-2.wav";
 unsigned processChunksAtOnce = 6;
 bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
 
-struct MoveTracker {
-	double positionX = 0, positionY = 0;
-
-	void move(double deltaX, double deltaY) {
-		positionX += deltaX, positionY += deltaY;
-	}
-
-	void checkMoveNeeded(std::function<void(int, int)> doMove) {
-		int movingX = int(fmax(-1, fmin(+1, positionX))), movingY = int(fmax(-1, fmin(+1, positionY)));
-		positionX -= movingX, positionY -= movingY;
-		if (movingX || movingY)
-			doMove(movingX, movingY);
-	}
-};
-
+/*
+ *	Idées:
+ *  1. Utiliser le HSV pour faire un effet où les pixels sont colorés au centre puis à mesure qu'ils s'éloignent perdent leur saturation (mais gardent leur valeur), ou l'inverse.
+ *  2. Effet simple de découpage de l'écran en 2, on dessine une wave et tout bouge en haut et en bas à chaque frame, sans blending/flou. La vitesse dépend du volume global (peut-être changer l'API pour avoir les 2).
+ */
 ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor, SDL_AudioSpec& wavSpec) noexcept {
 	double theta = 0;
 	auto currentColor = [&] {
@@ -40,7 +30,6 @@ ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor,
 	wantsFullFrequencies = false;
 
 	int frameNo = 0;
-	unsigned drawWidth = ds.w, drawHeight = ds.h;
 	while (true) {
 		auto& dftOut(dftProcessor.currentDFT());
 		processor.useConversionToFrequencyDomainValues = false;
@@ -53,7 +42,7 @@ ReturnObject drawShit(DftProcessorForWav &dftProcessor, DftProcessor &processor,
 			double r = rmax * cos(n / d * theta);
 			double x = r * cos(theta);
 			double y = r * sin(theta);
-			ds.setPixel(x + drawWidth / 2, y + drawHeight / 2, Color(300, 300, 300));
+			ds.setPixel(x + ds.w / 2, y + ds.h / 2, Color(300, 300, 300));
 			theta += 0.004;
 		}
 
@@ -79,7 +68,6 @@ ReturnObject drawShit2(DftProcessorForWav& dftProcessor, DftProcessor& processor
 	processChunksAtOnce = 1;
 	wantsFullFrequencies = false;
 
-	unsigned drawWidth = ds.w, drawHeight = ds.h;
 	double screenAngle = 0;
 	MoveTracker screen;
 
@@ -95,7 +83,7 @@ ReturnObject drawShit2(DftProcessorForWav& dftProcessor, DftProcessor& processor
 			double r = rmax * cos(n / d * theta);
 			double x = r * cos(theta);
 			double y = r * sin(theta);
-			ds.setPixel(x + drawWidth / 2, y + drawHeight / 2, Color(128, 128, 128).add(color));
+			ds.setPixel(x + ds.w / 2, y + ds.h / 2, Color(128, 128, 128).add(color));
 			theta += 0.004;
 		}
 
