@@ -20,7 +20,7 @@ struct Globals {
 	bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
 	SDL_Scancode lastPressedKey = SDL_SCANCODE_UNKNOWN;
 	// For programs using the rosace
-	double n = 6, d = 8;
+	double n = 6, d = 8, extraSensitivity = 0;
 };
 
 ReturnObject testWithHSLFramebuffer(Globals& globals, DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
@@ -67,7 +67,7 @@ ReturnObject pointCloudLateralScrollingOnly(Globals& globals, DftProcessorForWav
 		processor.useWindow = false;
 
 		// https://www.asc.ohio-state.edu/orban.14/math_coding/rose/rose.html
-		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
+		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB + globals.extraSensitivity);
 		Color color(currentAccentColor());
 		for (unsigned k = 0; k < 40; k++) {
 			double rmax = volume * 160;
@@ -106,7 +106,7 @@ ReturnObject pointCloudWithColorfulScrollingBackground(Globals& globals, DftProc
 		processor.useConversionToFrequencyDomainValues = false;
 		processor.useWindow = false;
 
-		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
+		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB + globals.extraSensitivity);
 		Color color(currentAccentColor());
 		for (unsigned k = 0; k < 15; k++) {
 			double rmax = volume * 160;
@@ -143,7 +143,7 @@ ReturnObject colorfulRosaceRGB(Globals& globals, DftProcessorForWav& dftProcesso
 		processor.useConversionToFrequencyDomainValues = false;
 		processor.useWindow = false;
 
-		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
+		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB + globals.extraSensitivity);
 		for (unsigned k = 0; k < 15; k++) {
 			double rmax = volume * 160;
 			double r = rmax * cos(globals.n / globals.d * theta);
@@ -181,7 +181,7 @@ ReturnObject colorfulRosaceHSL(Globals& globals, DftProcessorForWav& dftProcesso
 		processor.useConversionToFrequencyDomainValues = false;
 		processor.useWindow = false;
 
-		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
+		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB + globals.extraSensitivity);
 		for (unsigned k = 0; k < 15; k++) {
 			double rmax = volume * 160;
 			double r = rmax * cos(globals.n / globals.d * theta);
@@ -208,7 +208,6 @@ ReturnObject colorfulRotatingParticles(Globals& globals, DftProcessorForWav& dft
 	ScreenStretcher screen;
 	auto& ds = createDrawingSurface(240, 160, 3_X);
 	ds.clearScreen(currentColor());
-	ds.protectOverflow = true;
 	globals.processChunksAtOnce = 6;
 	globals.wantsFullFrequencies = true;
 
@@ -220,23 +219,13 @@ ReturnObject colorfulRotatingParticles(Globals& globals, DftProcessorForWav& dft
 		unsigned totalSteps = 30;
 		for (unsigned k = 0; k < totalSteps; k++) {
 			double dftValue = processor.getDftPointInterpolated(to_array(dftOut), 1 - double(k) / totalSteps, 50_Hz, wavSpec.freq / 2, true);
-			double volume = processor.convertPointToDecibels(dftValue, 35_DB);
+			double volume = processor.convertPointToDecibels(dftValue, 60_DB + globals.extraSensitivity);
 			double r = volume * 80, angle = 2 * M_PI * k / totalSteps + screenAngle;
 			double x = r * cos(angle);
 			double y = r * -sin(angle);
 			Uint32 color = HSV(fmodf(angle * 720 / (2 * M_PI) + theta, 360), 100, 100);
 			ds.fillRect(x + ds.w / 2, y + ds.h / 2, 1, 1, color);
 		}
-		//theta += 0.1;
-		//double r2 = 80, x2 = r2 * cos(theta), y2 = r2 * -sin(theta);
-		//unsigned x = x2 + ds.w / 2, y = y2 + ds.h / 2;
-		//float xFromCenter = float(x) - ds.w / 2, yFromCenter = ds.h / 2 - float(y);
-		//float angle = atan2f(yFromCenter, xFromCenter);
-		//float r = sqrtf(xFromCenter * xFromCenter + yFromCenter * yFromCenter);
-		//unsigned nextPixX = unsigned(ds.w / 2 + (r / 2) * cos(angle)), nextPixY = unsigned(ds.h / 2 - (r / 2) * sin(angle));
-
-		//ds.setPixel(x, y, RGB(255, 255, 0));
-		//ds.setPixel(nextPixX, nextPixY, RGB(0, 128, 0));
 
 		screenAngle += 0.03;
 		screen.stashMove(0.2);
@@ -258,7 +247,7 @@ ReturnObject smoothGraph(Globals& globals, DftProcessorForWav& dftProcessor, Dft
 		for (unsigned i = 0; i < 320; i++) {
 			float angle = i * 320.0f / 320;
 			double dftValue = processor.getDftPointInterpolated(to_array(dftOut), i / 320.0, 50_Hz, wavSpec.freq / 2, true);
-			double volume = processor.convertPointToDecibels(dftValue, 80_DB);
+			double volume = processor.convertPointToDecibels(dftValue, 80_DB + globals.extraSensitivity);
 			unsigned vol = unsigned(volume * 256);
 			for (unsigned j = 0; j < 480; j++) {
 				uint32_t color = j > vol ? RGB(0, 0, 0) : HSV(angle, j * 140.0f / 256.f, 50 + j * 90.0f / 256.f);
@@ -293,7 +282,7 @@ ReturnObject eqBars(Globals& globals, DftProcessorForWav& dftProcessor, DftProce
 				vol = unsigned(fmax(0, sample + 50) * 256 / 60);
 			}
 			else {
-				double volume = processor.convertPointToDecibels(sample, 50_DB);
+				double volume = processor.convertPointToDecibels(sample, 50_DB + globals.extraSensitivity);
 				vol = unsigned(volume * 256);
 			}
 			for (unsigned j = 0; j < 256; j++) {
@@ -310,8 +299,8 @@ ReturnObject eqBars(Globals& globals, DftProcessorForWav& dftProcessor, DftProce
 }
 
 ReturnObject (*drawingRoutines[])(Globals& globals, DftProcessorForWav&, DftProcessor&, SDL_AudioSpec&) noexcept = {
-	pointCloudWithColorfulScrollingBackground,
 	colorfulRotatingParticles,
+	pointCloudWithColorfulScrollingBackground,
 	eqBars,
 	smoothGraph,
 	colorfulRosaceRGB,
@@ -400,7 +389,7 @@ int main(int argc, char* args[]) {
 	};
 
 	useDrawingRoutine();
-	printf("Note: use left/right to cycle through effects. F1-F4 keys affect some parameters.\n");
+	printf("Note: use left/right to cycle through effects. F1-F6 keys affect some parameters.\n");
 
 	while (!quit && !dftProcessor.wouldOverflowWavFile()) {
 		SDL_Event e;
@@ -416,18 +405,26 @@ int main(int argc, char* args[]) {
 					useDrawingRoutine();
 				}
 				else if (e.key.keysym.scancode == SDL_SCANCODE_F1) {
+					globals.extraSensitivity -= 5;
+					printf("extra sensitivity=%f\n", globals.extraSensitivity);
+				}
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F2) {
+					globals.extraSensitivity += 5;
+					printf("extra sensitivity=%f\n", globals.extraSensitivity);
+				}
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F3) {
 					if (--globals.n < 1) globals.n = 1;
 					printf("n=%f, d=%f\n", globals.n, globals.d);
 				}
-				else if (e.key.keysym.scancode == SDL_SCANCODE_F2) {
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F4) {
 					globals.n++;
 					printf("n=%f, d=%f\n", globals.n, globals.d);
 				}
-				else if (e.key.keysym.scancode == SDL_SCANCODE_F3) {
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F5) {
 					if (--globals.d < 1) globals.d = 1;
 					printf("n=%f, d=%f\n", globals.n, globals.d);
 				}
-				else if (e.key.keysym.scancode == SDL_SCANCODE_F4) {
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F6) {
 					globals.d++;
 					printf("n=%f, d=%f\n", globals.n, globals.d);
 				}
