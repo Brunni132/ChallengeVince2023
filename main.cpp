@@ -5,9 +5,9 @@
 
 /*
  *	Idées:
- *  1. Utiliser le HSV pour faire un effet où les pixels sont colorés au centre puis à mesure qu'ils s'éloignent perdent leur saturation (mais gardent leur valeur), ou l'inverse.
- *  2. Effet simple de découpage de l'écran en 2, on dessine une wave et tout bouge en haut et en bas à chaque frame, sans blending/flou. La vitesse dépend du volume global (peut-être changer l'API pour avoir les 2).
- *  3. Un fichier de config permettant de choisir l'effet.
+ *  1. Un fichier de config permettant de choisir l'effet, ou alors pouvoir passer d'une coroutine à l'autre en faisant gauche/droite.
+ *  2. Utiliser le HSV pour faire un effet où les pixels sont colorés au centre puis à mesure qu'ils s'éloignent perdent leur saturation (mais gardent leur valeur), ou l'inverse.
+ *  3. Effet simple de découpage de l'écran en 2, on dessine une wave et tout bouge en haut et en bas à chaque frame, sans blending/flou. La vitesse dépend du volume global (peut-être changer l'API pour avoir les 2).
  *  4. Effet radar (en HSL), où on dessine juste une ligne en vague représentant l'equalizer.
  */
 
