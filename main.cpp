@@ -14,15 +14,21 @@
 #define DRAWING_ROUTINE_TO_USE colorfulRotatingParticles
 static auto DEFAULT_MUSIC_FILENAME = "music-3.wav";
 static const double MAX_RENDERED_FRAMERATE = 60;
-unsigned processChunksAtOnce = 6;
-bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
 
-ReturnObject testWithHSLFramebuffer(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+struct Globals {
+	unsigned processChunksAtOnce = 6;
+	bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
+	SDL_Scancode lastPressedKey = SDL_SCANCODE_UNKNOWN;
+	// For programs using the rosace
+	double n = 6, d = 8;
+};
+
+ReturnObject testWithHSLFramebuffer(Globals& globals, DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
 	auto& ds = createDrawingSurface(240, 160, 3_X);
 	ds.protectOverflow = true;
 	ds.useHsl = true;
-	processChunksAtOnce = 3;
-	wantsFullFrequencies = false;
+	globals.processChunksAtOnce = 3;
+	globals.wantsFullFrequencies = false;
 
 	double s = 0;
 	while (true) {
@@ -39,7 +45,7 @@ ReturnObject testWithHSLFramebuffer(DftProcessorForWav& dftProcessor, DftProcess
 	}
 }
 
-ReturnObject pointCloudLateralScrollingOnly(DftProcessorForWav &dftProcessor, DftProcessor &processor, SDL_AudioSpec& wavSpec) noexcept {
+ReturnObject pointCloudLateralScrollingOnly(Globals& globals, DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
 	double theta = 0;
 	auto currentColor = [&] {
 		return HSV(fmodf(theta / 4, 360), 100, 50);
@@ -51,8 +57,8 @@ ReturnObject pointCloudLateralScrollingOnly(DftProcessorForWav &dftProcessor, Df
 	auto& ds = createDrawingSurface(240, 160, 3_X);
 	ds.clearScreen(currentColor());
 	ds.protectOverflow = true;
-	processChunksAtOnce = 3;
-	wantsFullFrequencies = false;
+	globals.processChunksAtOnce = 3;
+	globals.wantsFullFrequencies = false;
 
 	ScreenMover screen;
 	while (true) {
@@ -64,8 +70,8 @@ ReturnObject pointCloudLateralScrollingOnly(DftProcessorForWav &dftProcessor, Df
 		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
 		Color color(currentAccentColor());
 		for (unsigned k = 0; k < 40; k++) {
-			double rmax = volume * 160, n = 6, d = 8;
-			double r = rmax * cos(n / d * theta);
+			double rmax = volume * 160;
+			double r = rmax * cos(globals.n / globals.d * theta);
 			double x = r * cos(theta);
 			double y = r * sin(theta);
 			ds.setPixel(x + ds.w / 2, y + ds.h / 2, Color(300, 300, 300));
@@ -78,7 +84,7 @@ ReturnObject pointCloudLateralScrollingOnly(DftProcessorForWav &dftProcessor, Df
 	}
 }
 
-ReturnObject pointCloudWithColorfulScrollingBackground(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+ReturnObject pointCloudWithColorfulScrollingBackground(Globals& globals, DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
 	double screenAngle = 0;
 	double theta = 0;
 	auto currentColor = [&] {
@@ -91,8 +97,8 @@ ReturnObject pointCloudWithColorfulScrollingBackground(DftProcessorForWav& dftPr
 	auto& ds = createDrawingSurface(240, 160, 3_X);
 	ds.clearScreen(currentColor());
 	ds.protectOverflow = true;
-	processChunksAtOnce = 1;
-	wantsFullFrequencies = false;
+	globals.processChunksAtOnce = 1;
+	globals.wantsFullFrequencies = false;
 
 
 	while (true) {
@@ -103,8 +109,8 @@ ReturnObject pointCloudWithColorfulScrollingBackground(DftProcessorForWav& dftPr
 		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
 		Color color(currentAccentColor());
 		for (unsigned k = 0; k < 15; k++) {
-			double rmax = volume * 160, n = 6, d = 8;
-			double r = rmax * cos(n / d * theta);
+			double rmax = volume * 160;
+			double r = rmax * cos(globals.n / globals.d * theta);
 			double x = r * cos(theta);
 			double y = r * sin(theta);
 			ds.setPixel(x + ds.w / 2, y + ds.h / 2, Color(128, 128, 128).add(color));
@@ -118,7 +124,7 @@ ReturnObject pointCloudWithColorfulScrollingBackground(DftProcessorForWav& dftPr
 	}
 }
 
-ReturnObject colorfulRosaceRGB(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+ReturnObject colorfulRosaceRGB(Globals& globals, DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
 	double screenAngle = 0;
 	double theta = 0;
 	auto currentColor = [&] {
@@ -128,8 +134,8 @@ ReturnObject colorfulRosaceRGB(DftProcessorForWav& dftProcessor, DftProcessor& p
 	auto& ds = createDrawingSurface(240, 160, 3_X);
 	ds.clearScreen(currentColor());
 	ds.protectOverflow = true;
-	processChunksAtOnce = 1;
-	wantsFullFrequencies = false;
+	globals.processChunksAtOnce = 1;
+	globals.wantsFullFrequencies = false;
 
 
 	while (true) {
@@ -139,8 +145,8 @@ ReturnObject colorfulRosaceRGB(DftProcessorForWav& dftProcessor, DftProcessor& p
 
 		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
 		for (unsigned k = 0; k < 15; k++) {
-			double rmax = volume * 160, n = 6, d = 8;
-			double r = rmax * cos(n / d * theta);
+			double rmax = volume * 160;
+			double r = rmax * cos(globals.n / globals.d * theta);
 			double x = r * cos(theta);
 			double y = r * sin(theta);
 			Uint32 color = HSV(fmodf(theta * 360, 360), 100, 100);
@@ -155,7 +161,7 @@ ReturnObject colorfulRosaceRGB(DftProcessorForWav& dftProcessor, DftProcessor& p
 	}
 }
 
-ReturnObject colorfulRosaceHSL(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+ReturnObject colorfulRosaceHSL(Globals& globals, DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
 	double screenAngle = 0;
 	double theta = 0;
 	auto currentColor = [&] {
@@ -166,8 +172,8 @@ ReturnObject colorfulRosaceHSL(DftProcessorForWav& dftProcessor, DftProcessor& p
 	ds.clearScreen(currentColor());
 	ds.protectOverflow = true;
 	ds.useHsl = true;
-	processChunksAtOnce = 1;
-	wantsFullFrequencies = false;
+	globals.processChunksAtOnce = 1;
+	globals.wantsFullFrequencies = false;
 
 
 	while (true) {
@@ -177,8 +183,8 @@ ReturnObject colorfulRosaceHSL(DftProcessorForWav& dftProcessor, DftProcessor& p
 
 		double volume = processor.convertPointToDecibels(dftOut[0], 35_DB);
 		for (unsigned k = 0; k < 15; k++) {
-			double rmax = volume * 160, n = 6, d = 8;
-			double r = rmax * cos(n / d * theta);
+			double rmax = volume * 160;
+			double r = rmax * cos(globals.n / globals.d * theta);
 			double x = r * cos(theta);
 			double y = r * sin(theta);
 			Color color(fmodf(theta, 1), 1, .5f);
@@ -193,7 +199,7 @@ ReturnObject colorfulRosaceHSL(DftProcessorForWav& dftProcessor, DftProcessor& p
 	}
 }
 
-ReturnObject colorfulRotatingParticles(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+ReturnObject colorfulRotatingParticles(Globals& globals, DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
 	double screenAngle = 0;
 	double theta = 0;
 	auto currentColor = [&] {
@@ -203,8 +209,8 @@ ReturnObject colorfulRotatingParticles(DftProcessorForWav& dftProcessor, DftProc
 	auto& ds = createDrawingSurface(240, 160, 3_X);
 	ds.clearScreen(currentColor());
 	ds.protectOverflow = true;
-	processChunksAtOnce = 6;
-	wantsFullFrequencies = true;
+	globals.processChunksAtOnce = 6;
+	globals.wantsFullFrequencies = true;
 
 	while (true) {
 		auto& dftOut(dftProcessor.currentDFT());
@@ -239,11 +245,11 @@ ReturnObject colorfulRotatingParticles(DftProcessorForWav& dftProcessor, DftProc
 	}
 }
 
-ReturnObject smoothGraph(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+ReturnObject smoothGraph(Globals& globals, DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
 	auto& ds = createDrawingSurface(480, 320, 1_X);
-	processChunksAtOnce = 6;
-	wantsFullFrequencies = true;
-	
+	globals.processChunksAtOnce = 6;
+	globals.wantsFullFrequencies = true;
+
 	ds.clearScreen(RGB(48, 48, 255));
 	while (true) {
 		auto& dftOut(dftProcessor.currentDFT());
@@ -251,7 +257,7 @@ ReturnObject smoothGraph(DftProcessorForWav& dftProcessor, DftProcessor& process
 		processor.useWindow = false;
 		for (unsigned i = 0; i < 320; i++) {
 			float angle = i * 320.0f / 320;
-			double dftValue = processor.getDftPointInterpolated(to_array(dftOut), i / 256.0, 50_Hz, wavSpec.freq / 2, true);
+			double dftValue = processor.getDftPointInterpolated(to_array(dftOut), i / 320.0, 50_Hz, wavSpec.freq / 2, true);
 			double volume = processor.convertPointToDecibels(dftValue, 80_DB);
 			unsigned vol = unsigned(volume * 256);
 			for (unsigned j = 0; j < 480; j++) {
@@ -264,11 +270,11 @@ ReturnObject smoothGraph(DftProcessorForWav& dftProcessor, DftProcessor& process
 	}
 }
 
-ReturnObject eqBars(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
+ReturnObject eqBars(Globals& globals, DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
 	bool useLinearScale = true;
 	auto& ds = createDrawingSurface(480, 320, 1_X);
-	processChunksAtOnce = 6;
-	wantsFullFrequencies = true;
+	globals.processChunksAtOnce = 6;
+	globals.wantsFullFrequencies = true;
 
 	ds.clearScreen(RGB(48, 48, 255));
 	while (true) {
@@ -302,6 +308,17 @@ ReturnObject eqBars(DftProcessorForWav& dftProcessor, DftProcessor& processor, S
 		co_await std::suspend_always{};
 	}
 }
+
+ReturnObject (*drawingRoutines[])(Globals& globals, DftProcessorForWav&, DftProcessor&, SDL_AudioSpec&) noexcept = {
+	pointCloudWithColorfulScrollingBackground,
+	colorfulRotatingParticles,
+	eqBars,
+	smoothGraph,
+	colorfulRosaceRGB,
+	testWithHSLFramebuffer,
+	pointCloudLateralScrollingOnly,
+	colorfulRosaceHSL,
+};
 
 int main(int argc, char* args[]) {
 #define QUIT() { system("pause"); return -1; }
@@ -372,15 +389,55 @@ int main(int argc, char* args[]) {
 	SDL_SetRenderDrawColor(renderer, 255, 255, 0, 255);
 	SDL_RenderClear(renderer);
 
-	std::coroutine_handle<> drawingCoroutine = DRAWING_ROUTINE_TO_USE(dftProcessor, processor, wavSpec);
+	Globals globals;
+	int currentDrawingRoutine = 0;
+	std::coroutine_handle<> drawingCoroutine;
 	double firstRenderedTime = getTime();
 	unsigned renderedFrames = 0, drawnFrames = 0;
-	printf("Target framerate: %f\n", 1.0 / (double(processor.inSamplesPerIteration * processChunksAtOnce) / wavSpec.freq));
+	auto useDrawingRoutine = [&] {
+		drawingCoroutine = drawingRoutines[currentDrawingRoutine](globals, dftProcessor, processor, wavSpec);
+		printf("Target framerate: %f\n", 1.0 / (double(processor.inSamplesPerIteration * globals.processChunksAtOnce) / wavSpec.freq));
+	};
+
+	useDrawingRoutine();
+	printf("Note: use left/right to cycle through effects. F1-F4 keys affect some parameters.\n");
 
 	while (!quit && !dftProcessor.wouldOverflowWavFile()) {
 		SDL_Event e;
+		globals.lastPressedKey = SDL_SCANCODE_UNKNOWN;
 		if (SDL_PollEvent(&e)) {
-			if (e.type == SDL_QUIT) quit = true;
+			if (e.type == SDL_KEYDOWN) {
+				if (e.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
+					if (++currentDrawingRoutine >= numberof(drawingRoutines)) currentDrawingRoutine = 0;
+					useDrawingRoutine();
+				}
+				else if (e.key.keysym.scancode == SDL_SCANCODE_LEFT) {
+					if (--currentDrawingRoutine < 0) currentDrawingRoutine = numberof(drawingRoutines) - 1;
+					useDrawingRoutine();
+				}
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F1) {
+					if (--globals.n < 1) globals.n = 1;
+					printf("n=%f, d=%f\n", globals.n, globals.d);
+				}
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F2) {
+					globals.n++;
+					printf("n=%f, d=%f\n", globals.n, globals.d);
+				}
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F3) {
+					if (--globals.d < 1) globals.d = 1;
+					printf("n=%f, d=%f\n", globals.n, globals.d);
+				}
+				else if (e.key.keysym.scancode == SDL_SCANCODE_F4) {
+					globals.d++;
+					printf("n=%f, d=%f\n", globals.n, globals.d);
+				}
+				else {
+					globals.lastPressedKey = e.key.keysym.scancode;
+				}
+			}
+			else if (e.type == SDL_QUIT) {
+				quit = true;
+			}
 		}
 
 		// Process frame
@@ -414,15 +471,15 @@ int main(int argc, char* args[]) {
 
 		// Wait until we have played the whole DFT'ed sample	
 		double time = getTime();
-		unsigned samplesPerProcessing = processor.inSamplesPerIteration * processChunksAtOnce;
+		unsigned samplesPerProcessing = processor.inSamplesPerIteration * globals.processChunksAtOnce;
 		auto processIfNecessary = [&] {
 			if ((time - lastProcessedTime) * wavSpec.freq >= samplesPerProcessing) {
-				lastProcessedTime += double(processor.inSamplesPerIteration * processChunksAtOnce) / wavSpec.freq;
-				if (wantsFullFrequencies) {
-					dftProcessor.processDFTInChunksAndSmooth(processChunksAtOnce, 0.2);
+				lastProcessedTime += double(processor.inSamplesPerIteration * globals.processChunksAtOnce) / wavSpec.freq;
+				if (globals.wantsFullFrequencies) {
+					dftProcessor.processDFTInChunksAndSmooth(globals.processChunksAtOnce, 0.2);
 				}
 				else {
-					dftProcessor.processVolumeOnly(processChunksAtOnce, 0.2);
+					dftProcessor.processVolumeOnly(globals.processChunksAtOnce, 0.2);
 				}
 
 				needsRerender = true;
