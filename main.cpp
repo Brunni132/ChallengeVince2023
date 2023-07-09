@@ -188,7 +188,7 @@ ReturnObject colorfulRosaceHSL(DftProcessorForWav& dftProcessor, DftProcessor& p
 
 		screenAngle += 0.0003;
 		screen.stashMove(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
-		screen.performMove(ds, currentColor(), 40, true);
+		screen.performMoveInHSLMode(ds, currentColor(), 40);
 		co_await std::suspend_always{};
 	}
 }
@@ -221,11 +221,20 @@ ReturnObject colorfulRotatingParticles(DftProcessorForWav& dftProcessor, DftProc
 			Uint32 color = HSV(fmodf(angle * 720 / (2 * M_PI) + theta, 360), 100, 100);
 			ds.fillRect(x + ds.w / 2, y + ds.h / 2, 1, 1, color);
 		}
-		theta += 0.1;
+		//theta += 0.1;
+		//double r2 = 80, x2 = r2 * cos(theta), y2 = r2 * -sin(theta);
+		//unsigned x = x2 + ds.w / 2, y = y2 + ds.h / 2;
+		//float xFromCenter = float(x) - ds.w / 2, yFromCenter = ds.h / 2 - float(y);
+		//float angle = atan2f(yFromCenter, xFromCenter);
+		//float r = sqrtf(xFromCenter * xFromCenter + yFromCenter * yFromCenter);
+		//unsigned nextPixX = unsigned(ds.w / 2 + (r / 2) * cos(angle)), nextPixY = unsigned(ds.h / 2 - (r / 2) * sin(angle));
+
+		//ds.setPixel(x, y, RGB(255, 255, 0));
+		//ds.setPixel(nextPixX, nextPixY, RGB(0, 128, 0));
 
 		screenAngle += 0.03;
 		screen.stashMove(0.2);
-		screen.performStretch(ds, currentColor(), 60);
+		screen.performCircular(ds, currentColor(), 60, true);
 		co_await std::suspend_always{};
 	}
 }

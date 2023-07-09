@@ -126,6 +126,12 @@ struct DrawingSurface {
 		}
 	}
 
+	DrawingSurface* clone() {
+		DrawingSurface* dest = new DrawingSurface(sdlSurface);
+		memcpy(dest->pixels, pixels, h * pitch * sizeof(float));
+		return dest;
+	}
+
 private:
 	static float hue2rgb(float p, float q, float t) {
 		if (t < 0)
@@ -230,7 +236,7 @@ struct ScreenMover {
 		positionX += deltaX, positionY += deltaY;
 	}
 
-	void performMove(DrawingSurface& ds, Color fillColor, float alpha = 16, bool forHsl = false) {
+	void performMove(DrawingSurface& ds, Color fillColor, float alpha = 16) {
 		int moveX = int(clamp(positionX, -1.0, +1.0)), moveY = int(clamp(positionY, -1.0, +1.0));
 		positionX -= moveX, positionY -= moveY;
 		if (moveX || moveY) {
@@ -238,14 +244,23 @@ struct ScreenMover {
 				for (unsigned x = 0; x < unsigned(ds.w); x++) {
 					Color pixel1 = ds.getPixel(x, y);
 					Color pixel2 = ds.getPixel(x - moveX, y - moveY, fillColor);
-					if (forHsl) {
-						pixel2.components[0] = pixel1.components[0];
-						pixel2.components[1] = pixel1.components[1];
-						ds.setPixel(x, y, pixel1.blend(pixel2, alpha).blend(Color(0, 0, 0), 2));
-					}
-					else {
-						ds.setPixel(x, y, pixel1.blend(pixel2, alpha));
-					}
+					ds.setPixel(x, y, pixel1.blend(pixel2, alpha));
+				}
+			}
+		}
+	}
+
+	void performMoveInHSLMode(DrawingSurface& ds, Color fillColor, float alpha = 16) {
+		int moveX = int(clamp(positionX, -1.0, +1.0)), moveY = int(clamp(positionY, -1.0, +1.0));
+		positionX -= moveX, positionY -= moveY;
+		if (moveX || moveY) {
+			for (unsigned y = 0; y < unsigned(ds.h); y++) {
+				for (unsigned x = 0; x < unsigned(ds.w); x++) {
+					Color pixel1 = ds.getPixel(x, y);
+					Color pixel2 = ds.getPixel(x - moveX, y - moveY, fillColor);
+					pixel2.components[0] = pixel1.components[0];
+					pixel2.components[1] = pixel1.components[1];
+					ds.setPixel(x, y, pixel1.blend(pixel2, alpha).blend(Color(0, 0, 0), 2));
 				}
 			}
 		}
@@ -279,22 +294,27 @@ struct ScreenStretcher {
 		}
 	}
 
-	void performCircular(DrawingSurface& ds, Color fillColor, float alpha = 16) {
+	void performCircular(DrawingSurface& ds, Color fillColor, float alpha = 16, bool expandOrContract = false) {
 		int moveInt = int(clamp(move, -1.0, +1.0));
 		move -= moveInt;
 		if (moveInt) {
+			auto copy = ds.clone();
 			unsigned w(ds.w), h(ds.h);
 			for (unsigned y = 0; y < h; y++) {
 				for (unsigned x = 0; x < w; x++) {
-					Color pixel1 = ds.getPixel(x, y); 
-					float angle = atan2f(y - h / 2, x - w /2);
-					float r = (y - h / 2) * (y - h / 2) + (x - w / 2) * (x - w / 2);
-					unsigned nextPixX = unsigned(x + w / 2 + (r - 1) * cos(r)), nextPixY = unsigned(y + h / 2 + (r - 1) * sin(r));
+					float xFromCenter = float(x) - w / 2, yFromCenter = h / 2 - float(y);
+					float angle = atan2f(yFromCenter, xFromCenter);
+					Color pixel1 = ds.getPixel(x, y);
+					unsigned nextPixX = expandOrContract ? roundf(x - 1 * cos(angle)) : roundf(x + 1 * cos(angle));
+					unsigned nextPixY = expandOrContract ? roundf(y + 1 * sin(angle)) : roundf(y - 1 * sin(angle));
 					Color pixel2 = ds.getPixel(nextPixX, nextPixY, fillColor);
-					//pixel2 = pixel2.blend(fillColor, 16);
+					//if (x == w / 2 || y == h / 2) pixel2 = pixel2.blend(fillColor, 60);
+					pixel2 = pixel2.blend(fillColor, 16);
+					//pixel2 = pixel2.subtract(Color(4, 4, 4));
 					ds.setPixel(x, y, pixel1.blend(pixel2, alpha));
 				}
 			}
+			delete copy;
 		}
 	}
 };
