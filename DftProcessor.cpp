@@ -100,7 +100,7 @@ double DftProcessor::getDftPointInterpolated(const double* dftOutData, double po
 
 	// Interpolate in the DFT table
 	unsigned integerIndexValue = unsigned(frequencyEquivalentInFft);
-	if (integerIndexValue >= outSamplesPerIteration - 1) return dftOutData[integerIndexValue];
+	if (integerIndexValue >= outSamplesPerIteration - 1) return dftOutData[outSamplesPerIteration - 1];
 
 	double realIndexValue = frequencyEquivalentInFft - floor(frequencyEquivalentInFft);
 	return dftOutData[integerIndexValue] * (1 - realIndexValue) + dftOutData[integerIndexValue + 1] * realIndexValue;

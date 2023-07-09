@@ -248,3 +248,36 @@ struct ScreenMoverHSL {
 		}
 	}
 };
+
+struct ScreenStretcher {
+	double move = 0;
+
+	void addMove(double delta) {
+		move += delta;
+	}
+
+	void performStretch(Color fillColor, float alpha = 16) {
+		int moveInt = int(fmax(-1, fmin(+1, move)));
+		move -= moveInt;
+		if (moveInt) {
+			unsigned w(drawingSurface->w), h(drawingSurface->h);
+			for (unsigned y = 0; y < h; y++) {
+				for (unsigned x = 0; x < w; x++) {
+					Color pixel1 = drawingSurface->getPixel(x, y);
+					unsigned nextPixX = x < w / 2 ? (x + 1) : (x - 1);
+					unsigned nextPixY = y < h / 2 ? (y + 1) : (y - 1);
+					Color pixel2 = drawingSurface->getPixel(nextPixX, nextPixY, fillColor);
+					//if (x == w / 2 || y == h / 2) pixel2 = pixel2.blend(fillColor, 60);
+					pixel2 = pixel2.blend(fillColor, 16);
+					drawingSurface->setPixel(x, y, pixel1.blend(pixel2, alpha));
+				}
+			}
+		}
+	}
+};
+
+static void fillRect(DrawingSurface& ds, unsigned x, unsigned y, unsigned w, unsigned h, Color c) {
+	for (unsigned i = 0; i < w; i++)
+		for (unsigned j = 0; j < h; j++)
+			ds.setPixel(x + i, y + j, c);
+}
