@@ -3,8 +3,16 @@
 #include "DrawingFloat.h"
 #include "Coroutines.h"
 
+/*
+ *	Idées:
+ *  1. Utiliser le HSV pour faire un effet où les pixels sont colorés au centre puis à mesure qu'ils s'éloignent perdent leur saturation (mais gardent leur valeur), ou l'inverse.
+ *  2. Effet simple de découpage de l'écran en 2, on dessine une wave et tout bouge en haut et en bas à chaque frame, sans blending/flou. La vitesse dépend du volume global (peut-être changer l'API pour avoir les 2).
+ *  3. Un fichier de config permettant de choisir l'effet.
+ */
+
 #define DRAWING_ROUTINE_TO_USE colorfulRotatingParticles
 static auto DEFAULT_MUSIC_FILENAME = "music-3.wav";
+static const double MAX_RENDERED_FRAMERATE = 60;
 unsigned processChunksAtOnce = 6;
 bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
 
@@ -31,11 +39,6 @@ ReturnObject testWithHSLFramebuffer(DftProcessorForWav& dftProcessor, DftProcess
 	}
 }
 
-/*
- *	Idées:
- *  1. Utiliser le HSV pour faire un effet où les pixels sont colorés au centre puis à mesure qu'ils s'éloignent perdent leur saturation (mais gardent leur valeur), ou l'inverse.
- *  2. Effet simple de découpage de l'écran en 2, on dessine une wave et tout bouge en haut et en bas à chaque frame, sans blending/flou. La vitesse dépend du volume global (peut-être changer l'API pour avoir les 2).
- */
 ReturnObject pointCloudLateralScrollingOnly(DftProcessorForWav &dftProcessor, DftProcessor &processor, SDL_AudioSpec& wavSpec) noexcept {
 	double theta = 0;
 	auto currentColor = [&] {
@@ -385,9 +388,9 @@ int main(int argc, char* args[]) {
 			drawnFrames += 1;
 
 			double time = getTime();
-			if (time - lastRenderedTime >= 1 / 60.0) {
-				lastRenderedTime += 1 / 60.0;
-				if (lastRenderedTime < time - 1 / 60.0) lastRenderedTime = time - 1 / 60.0;
+			if (time - lastRenderedTime >= 1 / MAX_RENDERED_FRAMERATE) {
+				lastRenderedTime += 1 / MAX_RENDERED_FRAMERATE;
+				if (lastRenderedTime < time - 1 / MAX_RENDERED_FRAMERATE) lastRenderedTime = time - 1 / MAX_RENDERED_FRAMERATE;
 				drawingSurface->blitToSdlSurface();
 				SDL_Rect srcRect = { 0, 0, sdlDrawingSurface->w, sdlDrawingSurface->h };
 				SDL_Rect dstRect = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
@@ -397,7 +400,7 @@ int main(int argc, char* args[]) {
 				SDL_RenderPresent(renderer);
 
 				renderedFrames += 1;
-				if (renderedFrames >= 200) {
+				if (time - firstRenderedTime >= 5) {
 					printf("Average framerate: rendered=%f, drawn=%f\n", renderedFrames / (time - firstRenderedTime), drawnFrames / (time - firstRenderedTime));
 					firstRenderedTime = time;
 					renderedFrames = drawnFrames = 0;

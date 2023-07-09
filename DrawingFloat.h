@@ -269,6 +269,7 @@ struct ScreenStretcher {
 					Color pixel2 = drawingSurface->getPixel(nextPixX, nextPixY, fillColor);
 					//if (x == w / 2 || y == h / 2) pixel2 = pixel2.blend(fillColor, 60);
 					pixel2 = pixel2.blend(fillColor, 16);
+					//pixel2 = pixel2.subtract(Color(4, 4, 4));
 					drawingSurface->setPixel(x, y, pixel1.blend(pixel2, alpha));
 				}
 			}
