@@ -8,6 +8,7 @@
  *  1. Utiliser le HSV pour faire un effet où les pixels sont colorés au centre puis à mesure qu'ils s'éloignent perdent leur saturation (mais gardent leur valeur), ou l'inverse.
  *  2. Effet simple de découpage de l'écran en 2, on dessine une wave et tout bouge en haut et en bas à chaque frame, sans blending/flou. La vitesse dépend du volume global (peut-être changer l'API pour avoir les 2).
  *  3. Un fichier de config permettant de choisir l'effet.
+ *  4. Effet radar (en HSL), où on dessine juste une ligne en vague représentant l'equalizer.
  */
 
 #define DRAWING_ROUTINE_TO_USE colorfulRotatingParticles
@@ -71,8 +72,8 @@ ReturnObject pointCloudLateralScrollingOnly(DftProcessorForWav &dftProcessor, Df
 			theta += 0.004;
 		}
 
-		screen.addMove(0.5, 0);
-		screen.performMove(currentColor(), 40);
+		screen.stashMove(0.5, 0);
+		screen.performMove(ds, currentColor(), 40);
 		co_await std::suspend_always{};
 	}
 }
@@ -111,8 +112,8 @@ ReturnObject pointCloudWithColorfulScrollingBackground(DftProcessorForWav& dftPr
 		}
 
 		screenAngle += 0.0003;
-		screen.addMove(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
-		screen.performMove(currentColor(), 40);
+		screen.stashMove(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
+		screen.performMove(ds, currentColor(), 40);
 		co_await std::suspend_always{};
 	}
 }
@@ -148,8 +149,8 @@ ReturnObject colorfulRosaceRGB(DftProcessorForWav& dftProcessor, DftProcessor& p
 		}
 
 		screenAngle += 0.0003;
-		screen.addMove(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
-		screen.performMove(currentColor(), 32);
+		screen.stashMove(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
+		screen.performMove(ds, currentColor(), 32);
 		co_await std::suspend_always{};
 	}
 }
@@ -160,7 +161,7 @@ ReturnObject colorfulRosaceHSL(DftProcessorForWav& dftProcessor, DftProcessor& p
 	auto currentColor = [&] {
 		return Color(0, 0, 0);
 	};
-	ScreenMoverHSL screen;
+	ScreenMover screen;
 	auto& ds = createDrawingSurface(240, 160, 3_X);
 	ds.clearScreen(currentColor());
 	ds.protectOverflow = true;
@@ -186,8 +187,8 @@ ReturnObject colorfulRosaceHSL(DftProcessorForWav& dftProcessor, DftProcessor& p
 		}
 
 		screenAngle += 0.0003;
-		screen.addMove(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
-		screen.performMove(currentColor(), 40);
+		screen.stashMove(cos(screenAngle) * 0.2, sin(screenAngle) * 0.2);
+		screen.performMove(ds, currentColor(), 40, true);
 		co_await std::suspend_always{};
 	}
 }
@@ -223,8 +224,8 @@ ReturnObject colorfulRotatingParticles(DftProcessorForWav& dftProcessor, DftProc
 		theta += 0.1;
 
 		screenAngle += 0.03;
-		screen.addMove(0.2);
-		screen.performStretch(currentColor(), 60);
+		screen.stashMove(0.2);
+		screen.performStretch(ds, currentColor(), 60);
 		co_await std::suspend_always{};
 	}
 }
@@ -274,7 +275,7 @@ ReturnObject eqBars(DftProcessorForWav& dftProcessor, DftProcessor& processor, S
 			unsigned vol;
 			if (useLinearScale) {
 				// Division by 60 because sometimes it goes slightly over 0
-				vol = fmax(0, sample + 50) * 256 / 60;
+				vol = unsigned(fmax(0, sample + 50) * 256 / 60);
 			}
 			else {
 				double volume = processor.convertPointToDecibels(sample, 50_DB);
@@ -385,10 +386,10 @@ int main(int argc, char* args[]) {
 			if (time - lastRenderedTime >= 1 / MAX_RENDERED_FRAMERATE) {
 				lastRenderedTime += 1 / MAX_RENDERED_FRAMERATE;
 				if (lastRenderedTime < time - 1 / MAX_RENDERED_FRAMERATE) lastRenderedTime = time - 1 / MAX_RENDERED_FRAMERATE;
-				drawingSurface->blitToSdlSurface();
-				SDL_Rect srcRect = { 0, 0, sdlDrawingSurface->w, sdlDrawingSurface->h };
+				g_drawingSurface->blitToSdlSurface();
+				SDL_Rect srcRect = { 0, 0, g_sdlSurface->w, g_sdlSurface->h };
 				SDL_Rect dstRect = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
-				SDL_BlitScaled(sdlDrawingSurface, &srcRect, screenSurface, &dstRect);
+				SDL_BlitScaled(g_sdlSurface, &srcRect, screenSurface, &dstRect);
 
 				SDL_UpdateWindowSurface(window);
 				SDL_RenderPresent(renderer);

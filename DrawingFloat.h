@@ -39,6 +39,8 @@ struct DrawingSurface {
 	bool protectOverflow;
 	bool useHsl; // false = rgb, true = hsl
 
+	DrawingSurface(const DrawingSurface&) = delete; // disallowed
+
 	DrawingSurface(SDL_Surface * surface) : w(surface->w), h(surface->h), pitch(surface->pitch), sdlSurface(surface) {
 		if (pitch < w * 4) throw "Error with pixel format, make sure that you use 32 bits";
 		pixels = new float[h * pitch];
@@ -46,7 +48,9 @@ struct DrawingSurface {
 		useHsl = false;
 	}
 
-	~DrawingSurface() { delete[] pixels; }
+	~DrawingSurface() {
+		delete[] pixels;
+	}
 
 	void clearScreen(Color color) {
 		unsigned size = pitch * h / 4;
@@ -160,8 +164,8 @@ private:
 
 static const bool isSDLSurface;
 
-extern DrawingSurface* drawingSurface;
-extern SDL_Surface* sdlDrawingSurface;
+extern SDL_Surface* g_sdlSurface;
+extern DrawingSurface* g_drawingSurface;
 extern SDL_Window* window;
 static unsigned SCREEN_WIDTH = 240 * 3, SCREEN_HEIGHT = 160 * 3;
 
@@ -171,9 +175,11 @@ static DrawingSurface& createDrawingSurface(unsigned width, unsigned height, uns
 	SCREEN_WIDTH = width * desiredScaling;
 	SCREEN_HEIGHT = height * desiredScaling;
 	SDL_SetWindowSize(window, SCREEN_WIDTH, SCREEN_HEIGHT);
-	sdlDrawingSurface = SDL_CreateRGBSurface(0, width, height, 32, 0xff << 16, 0xff << 8, 0xff, 0xff << 24);
-	drawingSurface = new DrawingSurface(sdlDrawingSurface);
-	return *drawingSurface;
+	if (g_sdlSurface) SDL_FreeSurface(g_sdlSurface);
+	if (g_drawingSurface) delete g_drawingSurface;
+	g_sdlSurface = SDL_CreateRGBSurface(0, width, height, 32, 0xff << 16, 0xff << 8, 0xff, 0xff << 24);
+	g_drawingSurface = new DrawingSurface(g_sdlSurface);
+	return *g_drawingSurface;
 }
 
 template<typename T>
@@ -220,43 +226,26 @@ static Uint32 HSV(float H, float S, float V) {
 struct ScreenMover {
 	double positionX = 0, positionY = 0;
 
-	void addMove(double deltaX, double deltaY) {
+	void stashMove(double deltaX, double deltaY) {
 		positionX += deltaX, positionY += deltaY;
 	}
 
-	void performMove(Color fillColor, float alpha = 16) {
+	void performMove(DrawingSurface& ds, Color fillColor, float alpha = 16, bool forHsl = false) {
 		int moveX = int(clamp(positionX, -1.0, +1.0)), moveY = int(clamp(positionY, -1.0, +1.0));
 		positionX -= moveX, positionY -= moveY;
 		if (moveX || moveY) {
-			for (unsigned y = 0; y < unsigned(drawingSurface->h); y++) {
-				for (unsigned x = 0; x < unsigned(drawingSurface->w); x++) {
-					Color pixel1 = drawingSurface->getPixel(x, y);
-					Color pixel2 = drawingSurface->getPixel(x - moveX, y - moveY, fillColor);
-					drawingSurface->setPixel(x, y, pixel1.blend(pixel2, alpha));
-				}
-			}
-		}
-	}
-};
-
-struct ScreenMoverHSL {
-	double positionX = 0, positionY = 0;
-
-	void addMove(double deltaX, double deltaY) {
-		positionX += deltaX, positionY += deltaY;
-	}
-
-	void performMove(Color fillColor, float alpha = 16) {
-		int moveX = int(clamp(positionX, -1.0, +1.0)), moveY = int(clamp(positionY, -1.0, +1.0));
-		positionX -= moveX, positionY -= moveY;
-		if (moveX || moveY) {
-			for (unsigned y = 0; y < unsigned(drawingSurface->h); y++) {
-				for (unsigned x = 0; x < unsigned(drawingSurface->w); x++) {
-					Color pixel1 = drawingSurface->getPixel(x, y);
-					Color pixel2 = drawingSurface->getPixel(x - moveX, y - moveY, fillColor);
-					pixel2.components[0] = pixel1.components[0];
-					pixel2.components[1] = pixel1.components[1];
-					drawingSurface->setPixel(x, y, pixel1.blend(pixel2, alpha).blend(Color(0, 0, 0), 2));
+			for (unsigned y = 0; y < unsigned(ds.h); y++) {
+				for (unsigned x = 0; x < unsigned(ds.w); x++) {
+					Color pixel1 = ds.getPixel(x, y);
+					Color pixel2 = ds.getPixel(x - moveX, y - moveY, fillColor);
+					if (forHsl) {
+						pixel2.components[0] = pixel1.components[0];
+						pixel2.components[1] = pixel1.components[1];
+						ds.setPixel(x, y, pixel1.blend(pixel2, alpha).blend(Color(0, 0, 0), 2));
+					}
+					else {
+						ds.setPixel(x, y, pixel1.blend(pixel2, alpha));
+					}
 				}
 			}
 		}
@@ -266,25 +255,44 @@ struct ScreenMoverHSL {
 struct ScreenStretcher {
 	double move = 0;
 
-	void addMove(double delta) {
+	void stashMove(double delta) {
 		move += delta;
 	}
 
-	void performStretch(Color fillColor, float alpha = 16) {
+	void performStretch(DrawingSurface& ds, Color fillColor, float alpha = 16) {
 		int moveInt = int(clamp(move, -1.0, +1.0));
 		move -= moveInt;
 		if (moveInt) {
-			unsigned w(drawingSurface->w), h(drawingSurface->h);
+			unsigned w(ds.w), h(ds.h);
 			for (unsigned y = 0; y < h; y++) {
 				for (unsigned x = 0; x < w; x++) {
-					Color pixel1 = drawingSurface->getPixel(x, y);
+					Color pixel1 = ds.getPixel(x, y);
 					unsigned nextPixX = x < w / 2 ? (x + 1) : (x - 1);
 					unsigned nextPixY = y < h / 2 ? (y + 1) : (y - 1);
-					Color pixel2 = drawingSurface->getPixel(nextPixX, nextPixY, fillColor);
+					Color pixel2 = ds.getPixel(nextPixX, nextPixY, fillColor);
 					//if (x == w / 2 || y == h / 2) pixel2 = pixel2.blend(fillColor, 60);
 					pixel2 = pixel2.blend(fillColor, 16);
 					//pixel2 = pixel2.subtract(Color(4, 4, 4));
-					drawingSurface->setPixel(x, y, pixel1.blend(pixel2, alpha));
+					ds.setPixel(x, y, pixel1.blend(pixel2, alpha));
+				}
+			}
+		}
+	}
+
+	void performCircular(DrawingSurface& ds, Color fillColor, float alpha = 16) {
+		int moveInt = int(clamp(move, -1.0, +1.0));
+		move -= moveInt;
+		if (moveInt) {
+			unsigned w(ds.w), h(ds.h);
+			for (unsigned y = 0; y < h; y++) {
+				for (unsigned x = 0; x < w; x++) {
+					Color pixel1 = ds.getPixel(x, y); 
+					float angle = atan2f(y - h / 2, x - w /2);
+					float r = (y - h / 2) * (y - h / 2) + (x - w / 2) * (x - w / 2);
+					unsigned nextPixX = unsigned(x + w / 2 + (r - 1) * cos(r)), nextPixY = unsigned(y + h / 2 + (r - 1) * sin(r));
+					Color pixel2 = ds.getPixel(nextPixX, nextPixY, fillColor);
+					//pixel2 = pixel2.blend(fillColor, 16);
+					ds.setPixel(x, y, pixel1.blend(pixel2, alpha));
 				}
 			}
 		}

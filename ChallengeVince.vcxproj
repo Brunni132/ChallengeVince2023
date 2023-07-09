@@ -145,7 +145,6 @@
     <ClCompile Include="DftProcessor.cpp" />
     <ClCompile Include="DrawingFloat.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="DrawingSurface.h" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="DftProcessor.h" />
