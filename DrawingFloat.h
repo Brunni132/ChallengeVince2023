@@ -75,38 +75,10 @@ struct DrawingSurface {
 		return Color(ptr[0], ptr[1], ptr[2]);
 	}
 
-	static float hue2rgb(float p, float q, float t) {
-		if (t < 0)
-			t += 1;
-		if (t > 1)
-			t -= 1;
-		if (t < float(1. / 6))
-			return p + (q - p) * 6 * t;
-		if (t < float(1. / 2))
-			return q;
-		if (t < float(2. / 3))
-			return p + (q - p) * (float(2. / 3) - t) * 6;
-		return p;
-	}
-
-	static inline float computeSaturatedL(float s, float l) {
-		if (s > 1) {
-			if (l < 0.5f) {
-				l *= s;
-				if (l >= 0.5f) l = 0.5f;
-			}
-			else {
-				l = 1 - ((1 - l) * s);
-				if (l <= 0.5f) l = 0.5f;
-			}
-		}
-		return l;
-	}
-
-	static inline float clamp(float v) {
-		if (v < 0) return 0;
-		if (v > 1) return 1;
-		return v;
+	void fillRect(unsigned x, unsigned y, unsigned w, unsigned h, Color c) {
+		for (unsigned i = 0; i < w; i++)
+			for (unsigned j = 0; j < h; j++)
+				setPixel(x + i, y + j, c);
 	}
 
 	void blitToSdlSurface() {
@@ -149,6 +121,41 @@ struct DrawingSurface {
 			}
 		}
 	}
+
+private:
+	static float hue2rgb(float p, float q, float t) {
+		if (t < 0)
+			t += 1;
+		if (t > 1)
+			t -= 1;
+		if (t < float(1. / 6))
+			return p + (q - p) * 6 * t;
+		if (t < float(1. / 2))
+			return q;
+		if (t < float(2. / 3))
+			return p + (q - p) * (float(2. / 3) - t) * 6;
+		return p;
+	}
+
+	static inline float computeSaturatedL(float s, float l) {
+		if (s > 1) {
+			if (l < 0.5f) {
+				l *= s;
+				if (l >= 0.5f) l = 0.5f;
+			}
+			else {
+				l = 1 - ((1 - l) * s);
+				if (l <= 0.5f) l = 0.5f;
+			}
+		}
+		return l;
+	}
+
+	static inline float clamp(float v) {
+		if (v < 0) return 0;
+		if (v > 1) return 1;
+		return v;
+	}
 };
 
 static const bool isSDLSurface;
@@ -169,6 +176,13 @@ static DrawingSurface& createDrawingSurface(unsigned width, unsigned height, uns
 	return *drawingSurface;
 }
 
+template<typename T>
+static T clamp(T value, T min, T max) {
+	if (value < min) return min;
+	if (value > max) return max;
+	return value;
+}
+
 // Can only be used if the DrawingSurface::useHsl is set to false
 static Uint32 RGBA(int r, int g, int b, int a) {
 	if (r < 0) r = 0;
@@ -185,9 +199,9 @@ static Uint32 RGBA(int r, int g, int b, int a) {
 static Uint32 RGB(int r, int g, int b) { return RGBA(r, g, b, 0xff); }
 
 static Uint32 HSV(float H, float S, float V) {
-	H = fmaxf(0, fminf(360, H));
-	S = fmaxf(0, fminf(100, S));
-	V = fmaxf(0, fminf(100, V));
+	H = clamp(H, 0.f, 360.f);
+	S = clamp(S, 0.f, 100.f);
+	V = clamp(V, 0.f, 100.f);
 	float s = S / 100;
 	float v = V / 100;
 	float C = s * v;
@@ -211,7 +225,7 @@ struct ScreenMover {
 	}
 
 	void performMove(Color fillColor, float alpha = 16) {
-		int moveX = int(fmax(-1, fmin(+1, positionX))), moveY = int(fmax(-1, fmin(+1, positionY)));
+		int moveX = int(clamp(positionX, -1.0, +1.0)), moveY = int(clamp(positionY, -1.0, +1.0));
 		positionX -= moveX, positionY -= moveY;
 		if (moveX || moveY) {
 			for (unsigned y = 0; y < unsigned(drawingSurface->h); y++) {
@@ -233,7 +247,7 @@ struct ScreenMoverHSL {
 	}
 
 	void performMove(Color fillColor, float alpha = 16) {
-		int moveX = int(fmax(-1, fmin(+1, positionX))), moveY = int(fmax(-1, fmin(+1, positionY)));
+		int moveX = int(clamp(positionX, -1.0, +1.0)), moveY = int(clamp(positionY, -1.0, +1.0));
 		positionX -= moveX, positionY -= moveY;
 		if (moveX || moveY) {
 			for (unsigned y = 0; y < unsigned(drawingSurface->h); y++) {
@@ -257,7 +271,7 @@ struct ScreenStretcher {
 	}
 
 	void performStretch(Color fillColor, float alpha = 16) {
-		int moveInt = int(fmax(-1, fmin(+1, move)));
+		int moveInt = int(clamp(move, -1.0, +1.0));
 		move -= moveInt;
 		if (moveInt) {
 			unsigned w(drawingSurface->w), h(drawingSurface->h);
@@ -276,9 +290,3 @@ struct ScreenStretcher {
 		}
 	}
 };
-
-static void fillRect(DrawingSurface& ds, unsigned x, unsigned y, unsigned w, unsigned h, Color c) {
-	for (unsigned i = 0; i < w; i++)
-		for (unsigned j = 0; j < h; j++)
-			ds.setPixel(x + i, y + j, c);
-}

@@ -16,7 +16,6 @@ static const double MAX_RENDERED_FRAMERATE = 60;
 unsigned processChunksAtOnce = 6;
 bool wantsFullFrequencies = true; // if false, just computes the volume, same value on all bands
 
-
 ReturnObject testWithHSLFramebuffer(DftProcessorForWav& dftProcessor, DftProcessor& processor, SDL_AudioSpec& wavSpec) noexcept {
 	auto& ds = createDrawingSurface(240, 160, 3_X);
 	ds.protectOverflow = true;
@@ -144,7 +143,7 @@ ReturnObject colorfulRosaceRGB(DftProcessorForWav& dftProcessor, DftProcessor& p
 			double x = r * cos(theta);
 			double y = r * sin(theta);
 			Uint32 color = HSV(fmodf(theta * 360, 360), 100, 100);
-			fillRect(ds, x + ds.w / 2, y + ds.h / 2, 2, 2, color);
+			ds.fillRect(x + ds.w / 2, y + ds.h / 2, 2, 2, color);
 			theta += 0.004;
 		}
 
@@ -182,7 +181,7 @@ ReturnObject colorfulRosaceHSL(DftProcessorForWav& dftProcessor, DftProcessor& p
 			double x = r * cos(theta);
 			double y = r * sin(theta);
 			Color color(fmodf(theta, 1), 1, .5f);
-			fillRect(ds, x + ds.w / 2, y + ds.h / 2, 2, 2, color);
+			ds.fillRect(x + ds.w / 2, y + ds.h / 2, 2, 2, color);
 			theta += 0.004;
 		}
 
@@ -219,7 +218,7 @@ ReturnObject colorfulRotatingParticles(DftProcessorForWav& dftProcessor, DftProc
 			double x = r * cos(angle);
 			double y = r * -sin(angle);
 			Uint32 color = HSV(fmodf(angle * 720 / (2 * M_PI) + theta, 360), 100, 100);
-			fillRect(ds, x + ds.w / 2, y + ds.h / 2, 1, 1, color);
+			ds.fillRect(x + ds.w / 2, y + ds.h / 2, 1, 1, color);
 		}
 		theta += 0.1;
 
@@ -377,11 +376,6 @@ int main(int argc, char* args[]) {
 		// Process frame
 		if (needsRerender) {
 			auto screenSurface = SDL_GetWindowSurface(window);
-
-			//moveScreen(1, 0, 8);
-			//Uint32 c1 = RGB(255, 255, 255), c2 = RGB(0, 0, 0);
-			//Uint16 a = 16;
-			//printf("Blending: %08x %08x a=%02x = %08x\n", c1, c2, a, blend(c1, c2, a));
 
 			drawingCoroutine();
 			needsRerender = false;
