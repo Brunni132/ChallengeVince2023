@@ -219,7 +219,7 @@ ReturnObject colorfulRotatingParticles(Globals& globals, DftProcessorForWav& dft
 		unsigned totalSteps = 30;
 		for (unsigned k = 0; k < totalSteps; k++) {
 			double dftValue = processor.getDftPointInterpolated(to_array(dftOut), 1 - double(k) / totalSteps, 50_Hz, wavSpec.freq / 2, true);
-			double volume = processor.convertPointToDecibels(dftValue, 60_DB + globals.extraSensitivity);
+			double volume = processor.convertPointToDecibels(dftValue, 35_DB + globals.extraSensitivity);
 			double r = volume * 80, angle = 2 * M_PI * k / totalSteps + screenAngle;
 			double x = r * cos(angle);
 			double y = r * -sin(angle);
