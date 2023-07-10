@@ -279,7 +279,7 @@ ReturnObject eqBars(Globals& globals, DftProcessorForWav& dftProcessor, DftProce
 			unsigned vol;
 			if (useLinearScale) {
 				// Division by 60 because sometimes it goes slightly over 0
-				vol = unsigned(fmax(0, sample + 50) * 256 / 60);
+				vol = unsigned(fmax(0, sample + 50 + globals.extraSensitivity) * 256 / 60);
 			}
 			else {
 				double volume = processor.convertPointToDecibels(sample, 50_DB + globals.extraSensitivity);
