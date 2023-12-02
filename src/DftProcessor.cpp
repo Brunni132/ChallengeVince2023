@@ -30,7 +30,9 @@ void DftProcessor::processDFT(const int16_t* inData, double* outData) {
 	// Avant ça on applique une fenêtre: https://en.wikipedia.org/wiki/Window_function#Flat_top_window
 	const double a0 = 0.3635819, a1 = 0.4891775, a2 = 0.1365995, a3 = 0.0106411;
 	for (unsigned k = 0; k < inSamplesPerIteration; k++) {
-		double sample = double(*inData++) / (32768 * 2) + double(*inData++) / (32768 * 2);
+		double data1 = double(*inData++);
+		double data2 = double(*inData++);
+		double sample = data1 / (32768 * 2) + data2 / (32768 * 2);
 
 		if (useWindow) {
 			double angle = 2 * M_PI * k / inSamplesPerIteration;

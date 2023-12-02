@@ -12,7 +12,8 @@
  */
 
 #define DRAWING_ROUTINE_TO_USE colorfulRotatingParticles
-static auto DEFAULT_MUSIC_FILENAME = "music-3.wav";
+
+static auto DEFAULT_MUSIC_FILENAME = "../music.wav";
 static const double MAX_RENDERED_FRAMERATE = 60;
 
 struct Globals {
@@ -335,9 +336,9 @@ int main(int argc, char* args[]) {
 	char fileName[4096];
 
 	if (argc == 2) {
-		strcpy_s(fileName, args[1]);
+		strncpy(fileName, args[1], numberof(fileName));
 	} else {
-		strcpy_s(fileName, DEFAULT_MUSIC_FILENAME);
+		strncpy(fileName, DEFAULT_MUSIC_FILENAME, numberof(fileName));
 		fprintf(stdout, "Note: you can pass the wav file to play as an argument (drag & drop on the executable)\nPlaying %s by default.\n", fileName);
 	}
 
@@ -451,7 +452,7 @@ int main(int argc, char* args[]) {
 				if (lastRenderedTime < time - 1 / MAX_RENDERED_FRAMERATE) lastRenderedTime = time - 1 / MAX_RENDERED_FRAMERATE;
 				g_drawingSurface->blitToSdlSurface();
 				SDL_Rect srcRect = { 0, 0, g_sdlSurface->w, g_sdlSurface->h };
-				SDL_Rect dstRect = { 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT };
+				SDL_Rect dstRect = { 0, 0, int(SCREEN_WIDTH), int(SCREEN_HEIGHT) };
 				SDL_BlitScaled(g_sdlSurface, &srcRect, screenSurface, &dstRect);
 
 				SDL_UpdateWindowSurface(window);
@@ -466,7 +467,7 @@ int main(int argc, char* args[]) {
 			}
 		}
 
-		// Wait until we have played the whole DFT'ed sample	
+		// Wait until we have played the whole DFT'ed sample
 		double time = getTime();
 		unsigned samplesPerProcessing = processor.inSamplesPerIteration * globals.processChunksAtOnce;
 		auto processIfNecessary = [&] {

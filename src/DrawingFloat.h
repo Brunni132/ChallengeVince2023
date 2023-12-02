@@ -168,8 +168,6 @@ private:
 	}
 };
 
-static const bool isSDLSurface;
-
 extern SDL_Surface* g_sdlSurface;
 extern DrawingSurface* g_drawingSurface;
 extern SDL_Window* window;

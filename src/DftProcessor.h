@@ -7,7 +7,7 @@
 #include "Ref.h"
 #include <inttypes.h>
 #include <math.h>
-#include <malloc.h>
+#include <stdlib.h>
 
 using std::vector;
 
